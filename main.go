@@ -69,7 +69,7 @@ func updateRequirementEntry(entry RequirementsEntry) string {
 	}
 
 	// not a git repo
-	if strings.Index(entry.Src, "https") == -1 && strings.Index(entry.Src, "git") == -1 {
+	if !strings.Contains(entry.Src, "https") && !strings.Contains(entry.Src, "git") {
 		return ""
 	}
 
@@ -99,16 +99,10 @@ func updateRequirementEntry(entry RequirementsEntry) string {
 
 func execute(command string) (string, error) {
 	slice := strings.Split(command, " ")
-	var cmd *exec.Cmd
-	if len(slice) == 1 {
-		cmd = exec.Command(slice[0])
-	} else {
-		cmd = exec.Command(slice[0], slice[1:]...)
-	}
-
-	out, err := cmd.CombinedOutput()
+	out, err := exec.Command(slice[0], slice[1:]...).CombinedOutput()
 	if out == nil {
 		return "", err
 	}
+
 	return strings.TrimSuffix(string(out), "\n"), err
 }
