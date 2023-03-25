@@ -49,18 +49,25 @@ func getNewVersion(src, version string) string {
 	return ""
 }
 
+// cleanupRole removes all temporary dirs and files created during role installation
+func cleanupRole(tmpdir, tmpfile string) {
+	os.RemoveAll(tmpdir) //nolint:errcheck // nothing can be done about it
+	os.Remove(tmpfile)   //nolint:errcheck // nothing can be done about it
+}
+
 // installRole writes specific role version to the target roles dir
 func installRole(entry RequirementsEntry) {
 	name := entry.GetName()
 	log.Println("Installing", name, entry.Version)
 
 	repo := strings.Replace(entry.Src, "git+", "", 1)
-	tmpdir, err := os.MkdirTemp("", "")
+	tmpdir, err := os.MkdirTemp("", "agru-"+name+"-*")
 	if err != nil {
 		log.Println("ERROR: cannot create tmp dir:", err)
 		return
 	}
 	tmpfile := tmpdir + ".tar"
+	defer cleanupRole(tmpdir, tmpfile)
 
 	// clone repo
 	var clone strings.Builder
