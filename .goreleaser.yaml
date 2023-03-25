@@ -34,7 +34,7 @@ archives:
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
 checksum:
-  disabled: true
+  disable: true
 changelog:
   sort: asc
   filters:
