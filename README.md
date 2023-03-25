@@ -41,6 +41,7 @@ Usage of agru:
   -r string
     	ansible-galaxy requirements file (default "requirements.yml")
   -u	update requirements file if newer versions are available
+  -v	verbose output
 ```
 
 ## What's a catch?
