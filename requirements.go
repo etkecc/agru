@@ -63,7 +63,7 @@ func updateRequirements(entries RequirementsFile) {
 		log.Println("ERROR: ", err)
 		return
 	}
-	if err := os.WriteFile(requirementsPath, outb, 0600); err != nil {
+	if err := os.WriteFile(requirementsPath, outb, 0o600); err != nil {
 		log.Println("ERROR: ", err)
 	}
 }

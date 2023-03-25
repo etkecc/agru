@@ -83,5 +83,4 @@ func (e RequirementsEntry) IsInstalled() bool {
 		return false
 	}
 	return true
-
 }

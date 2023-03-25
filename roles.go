@@ -115,7 +115,7 @@ func installRole(entry RequirementsEntry) {
 		log.Println("ERROR: cannot generate install info:", err)
 		return
 	}
-	if err := os.WriteFile(path.Join(rolesPath, name, "meta", ".galaxy_install_info"), outb, 0600); err != nil {
+	if err := os.WriteFile(path.Join(rolesPath, name, "meta", ".galaxy_install_info"), outb, 0o600); err != nil {
 		log.Println("ERROR: cannot write install info:", err)
 		return
 	}

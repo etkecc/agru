@@ -1,0 +1,48 @@
+before:
+  hooks:
+    - go mod tidy
+builds:
+  - env:
+      - CGO_ENABLED=0
+    binary: agru
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+nfpms:
+  - vendor: https://etke.cc
+    package_name: agru
+    maintainer: etke.cc
+    description: A.G.R.U. stands for ansible-galaxy requirements updater
+    homepage: https://gitlab.com/etke.cc/int/agru
+    license: GPL-3.0
+    formats:
+      - deb
+      - rpm
+      - apk
+    file_name_template: "{{ .PackageName }}-{{ .Version }}_{{ .Os }}-{{ .Arch }}"
+archives:
+  - format: binary
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+checksum:
+  disabled: true
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+
+# The lines beneath this are called `modelines`. See `:help modeline`
+# Feel free to remove those if you don't want/use them.
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# vim: set ts=2 sw=2 tw=0 fo=cnqoj
