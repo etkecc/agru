@@ -77,7 +77,7 @@ In fact, galaxy API is not used at all, thus no API-related actions are supporte
 
 ### Binaries and distro-specific packages
 
-On [Releases page](https://gitlab.com/etke.cc/int/agru/-/releases)
+[Releases page](https://gitlab.com/etke.cc/int/agru/-/releases) and [Arch Linux AUR](https://aur.archlinux.org/packages/agru)
 
 ### Build yourself
 
