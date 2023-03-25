@@ -21,4 +21,4 @@ release:
     name: goreleaser/goreleaser
     entrypoint: ['']
   script:
-    - goreleaser release --rm-dist
+    - goreleaser release --clean
