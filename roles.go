@@ -123,6 +123,13 @@ func installRole(entry RequirementsEntry) {
 
 // installMissingRoles writes all roles to the target roles dir if role doesn't exist or has different version
 func installMissingRoles(entries RequirementsFile) {
+	_, err := os.Stat(rolesPath)
+	if err != nil && os.IsNotExist(err) {
+		mkerr := os.Mkdir(rolesPath, 0o700)
+		if mkerr != nil {
+			log.Println("ERROR: cannot create roles path:", mkerr)
+		}
+	}
 	var wg sync.WaitGroup
 	wg.Add(len(entries))
 	for _, entry := range entries {
