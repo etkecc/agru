@@ -1,5 +1,16 @@
 # agru
 
+<!-- vim-markdown-toc GitLab -->
+
+* [What?](#what)
+* [Why?](#why)
+* [How?](#how)
+* [What's a catch?](#whats-a-catch)
+  * [only git repos are supported](#only-git-repos-are-supported)
+  * [only roles are supported](#only-roles-are-supported)
+  * [only update/install operations are supported](#only-updateinstall-operations-are-supported)
+
+<!-- vim-markdown-toc -->
 
 ## What?
 
@@ -28,3 +39,32 @@ Usage of agru:
     	ansible-galaxy requirements file (default "requirements.yml")
   -u	update requirements file if newer versions are available
 ```
+
+## What's a catch?
+
+Do you think A.G.R.U. is too good to be true? Well, it's true, but it has limitations:
+
+### only git repos are supported
+
+does **not** work:
+
+```yaml
+- src: geerlingguy.docker
+  version: 6.1.0
+```
+
+**does** work:
+```yaml
+- src: git+https://github.com/geerlingguy/ansible-role-docker
+  name: geerlingguy.docker
+  version: 6.1.0
+```
+
+### only roles are supported
+
+No collections at this moment, at all.
+
+### only update/install operations are supported
+
+No list, no role upload to galaxy, no role removal from galaxy.
+In fact, galaxy API is not used at all, thus no API-related actions are supported
