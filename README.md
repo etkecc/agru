@@ -36,6 +36,7 @@ Because `ansible-galaxy` is slow, **very** slow. And irrational. And miss some f
 
 ```
 Usage of agru:
+  -c	cleanup temporary files (default true)
   -p string
     	path to install roles (default "roles/galaxy/")
   -r string

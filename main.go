@@ -12,12 +12,14 @@ var (
 	requirementsPath       string
 	updateRequirementsFile bool
 	verbose                bool
+	cleanup                bool
 )
 
 func main() {
 	flag.StringVar(&requirementsPath, "r", "requirements.yml", "ansible-galaxy requirements file")
 	flag.StringVar(&rolesPath, "p", "roles/galaxy/", "path to install roles")
 	flag.BoolVar(&updateRequirementsFile, "u", false, "update requirements file if newer versions are available")
+	flag.BoolVar(&cleanup, "c", true, "cleanup temporary files")
 	flag.BoolVar(&verbose, "v", false, "verbose output")
 	flag.Parse()
 

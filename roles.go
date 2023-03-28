@@ -67,7 +67,9 @@ func installRole(entry RequirementsEntry) {
 		return
 	}
 	tmpfile := tmpdir + ".tar"
-	defer cleanupRole(tmpdir, tmpfile)
+	if cleanup {
+		defer cleanupRole(tmpdir, tmpfile)
+	}
 
 	// clone repo
 	var clone strings.Builder
