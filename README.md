@@ -5,7 +5,7 @@
 * [What?](#what)
 * [Why?](#why)
 * [How?](#how)
-* [What's a catch?](#whats-a-catch)
+* [What's the catch?](#whats-the-catch)
   * [only git repos are supported](#only-git-repos-are-supported)
   * [only roles are supported](#only-roles-are-supported)
   * [only update/install operations are supported](#only-updateinstall-operations-are-supported)
@@ -45,7 +45,7 @@ Usage of agru:
   -v	verbose output
 ```
 
-## What's a catch?
+## What's the catch?
 
 Do you think A.G.R.U. is too good to be true? Well, it's true, but it has limitations:
 
