@@ -18,18 +18,28 @@ type GalaxyInstallInfo struct {
 
 // RequirementsEntry is requirements.yml's entry structure
 type RequirementsEntry struct {
+	name    string `yaml:"-"`
 	Src     string `yaml:"src,omitempty"`
 	Version string `yaml:"version,omitempty"`
 	Name    string `yaml:"name,omitempty"`
 	Include string `yaml:"include,omitempty"`
 }
 
-// GetName returns entry name
+// GetName returns entry name with the following priority order
+// 1. name from the requirements.yml file (if set)
+// 2. name, generated from the entry's src
 func (e RequirementsEntry) GetName() string {
-	if e.Name != "" {
-		return e.Name
+	if e.name != "" {
+		return e.name
 	}
-	return strings.TrimSuffix(path.Base(e.Src), ".git")
+
+	if e.Name != "" {
+		e.name = e.Name
+		return e.name
+	}
+
+	e.name = strings.TrimSuffix(path.Base(e.Src), ".git")
+	return e.name
 }
 
 // GetPath returns path to the entry in filesystem

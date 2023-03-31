@@ -31,7 +31,7 @@ func main() {
 	}
 
 	log.Println("installing/updating roles (if any)")
-	installMissingRoles(append(entries, installOnly...))
+	installMissingRoles(mergeRequirementsEntries(entries, installOnly))
 
 	log.Println("done")
 }

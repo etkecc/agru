@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"sort"
 	"sync"
 
 	"gopkg.in/yaml.v3"
@@ -10,6 +11,13 @@ import (
 
 // RequirementsFile structure
 type RequirementsFile []RequirementsEntry
+
+// Sort entries by name
+func (r RequirementsFile) Sort() {
+	sort.Slice(r, func(i, j int) bool {
+		return r[i].GetName() < r[j].GetName()
+	})
+}
 
 // parseRequirements parses requirements.yml file and tries to update it
 // if it founds any includes within that file, they will be returned as second return value
@@ -23,6 +31,7 @@ func parseRequirements(path string) (RequirementsFile, RequirementsFile) {
 	if err := yaml.Unmarshal(fileb, &req); err != nil {
 		log.Println("ERROR: ", err)
 	}
+	req.Sort()
 
 	return req, parseAdditionalRequirements(req)
 }
@@ -66,4 +75,31 @@ func updateRequirements(entries RequirementsFile) {
 	if err := os.WriteFile(requirementsPath, outb, 0o600); err != nil {
 		log.Println("ERROR: ", err)
 	}
+}
+
+// mergeRequirementsEntries merges all requirements.yml files entries into one slice,
+// deduplicates them and prioritizes entries from the main requirements.yml file
+func mergeRequirementsEntries(mainReq RequirementsFile, additionalReqs ...RequirementsFile) RequirementsFile {
+	uniq := make(map[string]RequirementsEntry, 0)
+	for _, entry := range mainReq {
+		uniq[entry.GetName()] = entry
+	}
+	additionalEntries := make(RequirementsFile, 0, len(additionalReqs))
+	for _, additionalReq := range additionalReqs {
+		additionalEntries = append(additionalEntries, additionalReq...)
+	}
+
+	for _, entry := range additionalEntries {
+		if _, ok := uniq[entry.GetName()]; !ok {
+			uniq[entry.GetName()] = entry
+		}
+	}
+
+	entries := make(RequirementsFile, 0, len(uniq))
+	for _, entry := range uniq {
+		entries = append(entries, entry)
+	}
+	entries.Sort()
+
+	return entries
 }
