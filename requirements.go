@@ -72,6 +72,7 @@ func updateRequirements(entries RequirementsFile) {
 		log.Println("ERROR: ", err)
 		return
 	}
+	outb = append([]byte("---\n\n"), outb...) // preserve the separator to make yaml lint happy
 	if err := os.WriteFile(requirementsPath, outb, 0o600); err != nil {
 		log.Println("ERROR: ", err)
 	}
