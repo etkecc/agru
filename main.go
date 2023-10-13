@@ -36,9 +36,9 @@ func main() {
 	log.Println("done")
 }
 
-func execute(command string, dir string) (string, error) {
+func execute(command, dir string) (string, error) {
 	slice := strings.Split(command, " ")
-	cmd := exec.Command(slice[0], slice[1:]...)
+	cmd := exec.Command(slice[0], slice[1:]...) //nolint:gosec // that's intended
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	if verbose {

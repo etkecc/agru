@@ -51,12 +51,12 @@ func getNewVersion(src, version string) string {
 
 // cleanupRole removes all temporary dirs and files created during role installation
 func cleanupRole(tmpdir, tmpfile string) {
-	os.RemoveAll(tmpdir) //nolint:errcheck // nothing can be done about it
-	os.Remove(tmpfile)   //nolint:errcheck // nothing can be done about it
+	os.RemoveAll(tmpdir)
+	os.Remove(tmpfile)
 }
 
 // installRole writes specific role version to the target roles dir
-func installRole(entry RequirementsEntry) {
+func installRole(entry *RequirementsEntry) {
 	name := entry.GetName()
 	log.Println("Installing", name, entry.Version)
 
@@ -142,7 +142,7 @@ func installMissingRoles(entries RequirementsFile) {
 	var wg sync.WaitGroup
 	wg.Add(len(entries))
 	for _, entry := range entries {
-		go func(entry RequirementsEntry, wg *sync.WaitGroup) {
+		go func(entry *RequirementsEntry, wg *sync.WaitGroup) {
 			if !entry.IsInstalled() {
 				installRole(entry)
 			}

@@ -28,7 +28,7 @@ type RequirementsEntry struct {
 // GetName returns entry name with the following priority order
 // 1. name from the requirements.yml file (if set)
 // 2. name, generated from the entry's src
-func (e RequirementsEntry) GetName() string {
+func (e *RequirementsEntry) GetName() string {
 	if e.name != "" {
 		return e.name
 	}
@@ -43,17 +43,17 @@ func (e RequirementsEntry) GetName() string {
 }
 
 // GetPath returns path to the entry in filesystem
-func (e RequirementsEntry) GetPath() string {
+func (e *RequirementsEntry) GetPath() string {
 	return path.Join(rolesPath, e.GetName())
 }
 
 // GetInstallInfoPath returns path to .galaxy_install_info for that entry
-func (e RequirementsEntry) GetInstallInfoPath() string {
+func (e *RequirementsEntry) GetInstallInfoPath() string {
 	return path.Join(e.GetPath(), "meta", ".galaxy_install_info")
 }
 
 // GetInstallInfo parses .galaxy_install_info and returns parsed info
-func (e RequirementsEntry) GetInstallInfo() GalaxyInstallInfo {
+func (e *RequirementsEntry) GetInstallInfo() GalaxyInstallInfo {
 	_, err := os.Stat(e.GetInstallInfoPath())
 	if err != nil && os.IsNotExist(err) {
 		return GalaxyInstallInfo{}
@@ -74,7 +74,7 @@ func (e RequirementsEntry) GetInstallInfo() GalaxyInstallInfo {
 }
 
 // GenerateInstallInfo generates fresh install info from current state of the entry struct
-func (e RequirementsEntry) GenerateInstallInfo() ([]byte, error) {
+func (e *RequirementsEntry) GenerateInstallInfo() ([]byte, error) {
 	info := GalaxyInstallInfo{
 		InstallDate: time.Now().Format("Mon 02 Jan 2006 03:04:05 PM "), // the trailing space is done by ansible-galaxy
 		Version:     e.Version,
@@ -83,7 +83,7 @@ func (e RequirementsEntry) GenerateInstallInfo() ([]byte, error) {
 }
 
 // IsInstalled checks if that entry with that specific version is installed
-func (e RequirementsEntry) IsInstalled() bool {
+func (e *RequirementsEntry) IsInstalled() bool {
 	_, err := os.Stat(e.GetPath())
 	if err != nil && os.IsNotExist(err) {
 		return false

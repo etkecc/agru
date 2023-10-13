@@ -10,7 +10,7 @@ import (
 )
 
 // RequirementsFile structure
-type RequirementsFile []RequirementsEntry
+type RequirementsFile []*RequirementsEntry
 
 // Sort entries by name
 func (r RequirementsFile) Sort() {
@@ -21,7 +21,7 @@ func (r RequirementsFile) Sort() {
 
 // parseRequirements parses requirements.yml file and tries to update it
 // if it founds any includes within that file, they will be returned as second return value
-func parseRequirements(path string) (RequirementsFile, RequirementsFile) {
+func parseRequirements(path string) (main, additional RequirementsFile) {
 	fileb, err := os.ReadFile(path)
 	if err != nil {
 		log.Println("ERROR: ", err)
@@ -37,7 +37,7 @@ func parseRequirements(path string) (RequirementsFile, RequirementsFile) {
 }
 
 func parseAdditionalRequirements(req RequirementsFile) RequirementsFile {
-	additional := make([]RequirementsEntry, 0)
+	additional := make([]*RequirementsEntry, 0)
 	for _, entry := range req {
 		if entry.Include != "" {
 			// no recursive iteration over deeper levels, because it's not used anywhere
@@ -55,7 +55,7 @@ func updateRequirements(entries RequirementsFile) {
 	var wg sync.WaitGroup
 	wg.Add(len(entries))
 	for i, entry := range entries {
-		go func(i int, entry RequirementsEntry, wg *sync.WaitGroup) {
+		go func(i int, entry *RequirementsEntry, wg *sync.WaitGroup) {
 			newVersion := getNewVersion(entry.Src, entry.Version)
 			if newVersion != "" {
 				log.Println(entry.Src, entry.Version, "->", newVersion)
@@ -81,7 +81,7 @@ func updateRequirements(entries RequirementsFile) {
 // mergeRequirementsEntries merges all requirements.yml files entries into one slice,
 // deduplicates them and prioritizes entries from the main requirements.yml file
 func mergeRequirementsEntries(mainReq RequirementsFile, additionalReqs ...RequirementsFile) RequirementsFile {
-	uniq := make(map[string]RequirementsEntry, 0)
+	uniq := make(map[string]*RequirementsEntry, 0)
 	for _, entry := range mainReq {
 		uniq[entry.GetName()] = entry
 	}

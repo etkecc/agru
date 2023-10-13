@@ -6,12 +6,12 @@
 * [Why?](#why)
 * [How?](#how)
 * [What's the catch?](#whats-the-catch)
-  * [only git repos are supported](#only-git-repos-are-supported)
-  * [only roles are supported](#only-roles-are-supported)
-  * [only update/install operations are supported](#only-updateinstall-operations-are-supported)
+    * [only git repos are supported](#only-git-repos-are-supported)
+    * [only roles are supported](#only-roles-are-supported)
+    * [only update/install operations are supported](#only-updateinstall-operations-are-supported)
 * [Where to get?](#where-to-get)
-  * [Binaries and distro-specific packages](#binaries-and-distro-specific-packages)
-  * [Build yourself](#build-yourself)
+    * [Binaries and distro-specific packages](#binaries-and-distro-specific-packages)
+    * [Build yourself](#build-yourself)
 
 <!-- vim-markdown-toc -->
 
@@ -78,7 +78,7 @@ In fact, galaxy API is not used at all, thus no API-related actions are supporte
 
 ### Binaries and distro-specific packages
 
-[Releases page](https://gitlab.com/etke.cc/int/agru/-/releases) and [Arch Linux AUR](https://aur.archlinux.org/packages/agru)
+[Releases page](https://gitlab.com/etke.cc/tools/agru/-/releases) and [Arch Linux AUR](https://aur.archlinux.org/packages/agru)
 
 ### Build yourself
 
