@@ -18,12 +18,12 @@ type GalaxyInstallInfo struct {
 
 // RequirementsEntry is requirements.yml's entry structure
 type RequirementsEntry struct {
-	name             string `yaml:"-"`
-	Src              string `yaml:"src,omitempty"`
-	Version          string `yaml:"version,omitempty"`
-	Name             string `yaml:"name,omitempty"`
-	Include          string `yaml:"include,omitempty"`
-	ActivationPrefix string `yaml:"activation_prefix,omitempty"`
+	name             string  `yaml:"-"`
+	Src              string  `yaml:"src,omitempty"`
+	Version          string  `yaml:"version,omitempty"`
+	Name             string  `yaml:"name,omitempty"`
+	Include          string  `yaml:"include,omitempty"`
+	ActivationPrefix *string `yaml:"activation_prefix,omitempty"`
 }
 
 // GetName returns entry name with the following priority order
