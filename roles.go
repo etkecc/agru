@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"os"
 	"path"
 	"strings"
@@ -27,7 +26,7 @@ func getNewVersion(src, version string) string {
 	repo := strings.Replace(src, "git+https", "https", 1)
 	tags, err := execute("git ls-remote -tq --sort=-version:refname "+repo, "")
 	if err != nil {
-		log.Println("ERROR: ", err)
+		log("ERROR:", err)
 		return ""
 	}
 	if tags == "" {
@@ -37,7 +36,7 @@ func getNewVersion(src, version string) string {
 	lastline := strings.Split(tags, "\n")[0]
 	tagidx := strings.Index(lastline, "refs/tags/")
 	if tagidx == -1 {
-		log.Println("ERROR: lastline: ", lastline)
+		log("ERROR: lastline:", lastline)
 		return ""
 	}
 	last := strings.Replace(lastline[tagidx:], "refs/tags/", "", 1)
@@ -58,12 +57,12 @@ func cleanupRole(tmpdir, tmpfile string) {
 // installRole writes specific role version to the target roles dir
 func installRole(entry *RequirementsEntry) {
 	name := entry.GetName()
-	log.Println("Installing", name, entry.Version)
+	log("installing", name, entry.Version)
 
 	repo := strings.Replace(entry.Src, "git+", "", 1)
 	tmpdir, err := os.MkdirTemp("", "agru-"+name+"-*")
 	if err != nil {
-		log.Println("ERROR: cannot create tmp dir:", err)
+		log("ERROR: cannot create tmp dir:", err)
 		return
 	}
 	tmpfile := tmpdir + ".tar"
@@ -90,8 +89,8 @@ func installRole(entry *RequirementsEntry) {
 	clone.WriteString(tmpdir)
 	out, err := execute(clone.String(), "")
 	if err != nil {
-		log.Println("ERROR: cannot clone repo:", err)
-		log.Println(out)
+		log("ERROR: cannot clone repo:", err)
+		log(out)
 		return
 	}
 
@@ -105,27 +104,27 @@ func installRole(entry *RequirementsEntry) {
 	archive.WriteString(entry.Version)
 	out, err = execute(archive.String(), tmpdir)
 	if err != nil {
-		log.Println("ERROR: cannot archive repo:", err)
-		log.Println(out)
+		log("ERROR: cannot archive repo:", err)
+		log(out)
 		return
 	}
 
 	// extract the archive into roles path
 	out, err = execute("tar -xf "+tmpfile, rolesPath)
 	if err != nil {
-		log.Println("ERROR: cannot extract archive:", err)
-		log.Println(out)
+		log("ERROR: cannot extract archive:", err)
+		log(out)
 		return
 	}
 
 	// write install info file
 	outb, err := entry.GenerateInstallInfo()
 	if err != nil {
-		log.Println("ERROR: cannot generate install info:", err)
+		log("ERROR: cannot generate install info:", err)
 		return
 	}
 	if err := os.WriteFile(path.Join(rolesPath, name, "meta", ".galaxy_install_info"), outb, 0o600); err != nil {
-		log.Println("ERROR: cannot write install info:", err)
+		log("ERROR: cannot write install info:", err)
 		return
 	}
 }
@@ -136,7 +135,7 @@ func installMissingRoles(entries RequirementsFile) {
 	if err != nil && os.IsNotExist(err) {
 		mkerr := os.Mkdir(rolesPath, 0o700)
 		if mkerr != nil {
-			log.Println("ERROR: cannot create roles path:", mkerr)
+			log("ERROR: cannot create roles path:", mkerr)
 		}
 	}
 	var wg sync.WaitGroup

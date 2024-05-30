@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"os"
 	"sort"
 	"sync"
@@ -24,12 +23,12 @@ func (r RequirementsFile) Sort() {
 func parseRequirements(path string) (main, additional RequirementsFile) {
 	fileb, err := os.ReadFile(path)
 	if err != nil {
-		log.Println("ERROR: ", err)
+		log("ERROR:", err)
 		return RequirementsFile{}, RequirementsFile{}
 	}
 	var req RequirementsFile
 	if err := yaml.Unmarshal(fileb, &req); err != nil {
-		log.Println("ERROR: ", err)
+		log("ERROR:", err)
 	}
 	req.Sort()
 
@@ -58,7 +57,7 @@ func updateRequirements(entries RequirementsFile) {
 		go func(i int, entry *RequirementsEntry, wg *sync.WaitGroup) {
 			newVersion := getNewVersion(entry.Src, entry.Version)
 			if newVersion != "" {
-				log.Println(entry.Src, entry.Version, "->", newVersion)
+				log(entry.Src, entry.Version, "->", newVersion)
 				entry.Version = newVersion
 				entries[i] = entry
 			}
@@ -69,12 +68,12 @@ func updateRequirements(entries RequirementsFile) {
 
 	outb, err := yaml.Marshal(entries)
 	if err != nil {
-		log.Println("ERROR: ", err)
+		log("ERROR:", err)
 		return
 	}
 	outb = append([]byte("---\n\n"), outb...) // preserve the separator to make yaml lint happy
 	if err := os.WriteFile(requirementsPath, outb, 0o600); err != nil {
-		log.Println("ERROR: ", err)
+		log("ERROR:", err)
 	}
 }
 

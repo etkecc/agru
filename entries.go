@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"os"
 	"path"
 	"strings"
@@ -62,13 +61,13 @@ func (e *RequirementsEntry) GetInstallInfo() GalaxyInstallInfo {
 
 	fileb, err := os.ReadFile(e.GetInstallInfoPath())
 	if err != nil {
-		log.Println("ERROR: ", err)
+		log("ERROR:", err)
 		return GalaxyInstallInfo{}
 	}
 
 	var info GalaxyInstallInfo
 	if err := yaml.Unmarshal(fileb, &info); err != nil {
-		log.Println("ERROR: ", err)
+		log("ERROR:", err)
 	}
 
 	return info

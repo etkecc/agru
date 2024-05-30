@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"log"
+	"fmt"
 	"os/exec"
 	"strings"
 )
@@ -23,17 +23,18 @@ func main() {
 	flag.BoolVar(&verbose, "v", false, "verbose output")
 	flag.Parse()
 
-	log.Println("parsing", requirementsPath)
+	log(fmt.Sprintf("\033[1ma\033[0mnsible-\033[1mg\033[0malaxy \033[1mr\033[0mequirements.yml \033[1mu\033[0mpdater (update=%t cleanup=%t verbose=%t)", updateRequirementsFile, cleanup, verbose))
+	log("parsing", requirementsPath)
 	entries, installOnly := parseRequirements(requirementsPath)
 	if updateRequirementsFile {
-		log.Println("updating", requirementsPath)
+		log("updating", requirementsPath)
 		updateRequirements(entries)
 	}
 
-	log.Println("installing/updating roles (if any)")
+	log("installing/updating roles (if any)")
 	installMissingRoles(mergeRequirementsEntries(entries, installOnly))
 
-	log.Println("done")
+	log("done")
 }
 
 func execute(command, dir string) (string, error) {
@@ -41,17 +42,26 @@ func execute(command, dir string) (string, error) {
 	cmd := exec.Command(slice[0], slice[1:]...) //nolint:gosec // that's intended
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
-	if verbose {
-		log.Println("DEBUG: execute")
-		log.Println("       command:", command)
-		log.Println("       chdir:", dir)
-		if out != nil {
-			log.Println("       output:", strings.TrimSuffix(string(out), "\n"))
-		}
+	debug("execute")
+	debug("    command:", command)
+	debug("    chdir:", dir)
+	if out != nil {
+		debug("    output:", strings.TrimSuffix(string(out), "\n"))
 	}
 	if out == nil {
 		return "", err
 	}
 
 	return strings.TrimSuffix(string(out), "\n"), err
+}
+
+func log(v ...any) {
+	v = append([]any{"[a.g.r.u]"}, v...)
+	fmt.Println(v...)
+}
+
+func debug(v ...any) {
+	if verbose {
+		log(v...)
+	}
 }

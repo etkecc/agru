@@ -4,14 +4,13 @@ run:
   issues-exit-code: 1
   tests: true
   build-tags: []
-  skip-dirs:
-    - mocks
   skip-dirs-use-default: true
   skip-files: []
   modules-download-mode: readonly
 
 output:
-  format: colored-line-number
+  formats:
+    - format: colored-line-number
   print-issued-lines: true
   print-linter-name: true
   sort-results: true
@@ -53,8 +52,6 @@ linters-settings:
         replacement: 'a[b:]'
   gofumpt:
     extra-rules: true
-  govet:
-    check-shadowing: true
   grouper:
     const-require-single-const: true
     import-require-single-import: true
@@ -66,7 +63,6 @@ linters-settings:
     time-layout: true
     crypto-hash: true
     default-rpc-path: true
-    os-dev-null: true
     sql-isolation-level: true
     tls-signature-scheme: true
     constant-kind: true
@@ -89,15 +85,12 @@ linters:
     - errchkjson
     - errname
     - errorlint
-    - execinquery
     - exhaustive
     - exportloopref
     - forcetypeassert
-    - gochecknoinits
     - gocognit
     - gocritic
     - gocyclo
-    - goerr113
     - gofmt
     - gofumpt
     - goimports
@@ -125,6 +118,8 @@ linters:
 
 
 issues:
+  exclude-dirs:
+    - mocks
   exclude-rules:
     - path: _test\.go
       linters:
@@ -139,6 +134,9 @@ issues:
     - linters:
         - lll
       source: "^//go:generate "
+    - linters:
+        - revive
+      text: "returns unexported type"
   max-issues-per-linter: 0
   max-same-issues: 0
   new: false

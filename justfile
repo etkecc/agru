@@ -4,7 +4,7 @@ default:
 
 # update go deps
 update *flags:
-    go get {{flags}} .
+    go get {{ flags }} .
     go mod tidy
     go mod vendor
 
@@ -17,8 +17,8 @@ lintfix:
     golangci-lint run --fix ./...
 
 # run unit tests
-test:
-    @go test -coverprofile=cover.out ./...
+test packages="./...":
+    @go test -cover -coverprofile=cover.out -coverpkg={{ packages }} -covermode=set {{ packages }}
     @go tool cover -func=cover.out
     -@rm -f cover.out
 
@@ -28,4 +28,4 @@ run:
 
 # build app
 build:
-    go build -v -o agru .
+    CGO_ENABLED=0 go build -ldflags '-extldflags "-static"' -tags timetzdata,goolm -v -o agru .
