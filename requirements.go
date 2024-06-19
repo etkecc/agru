@@ -18,6 +18,15 @@ func (r RequirementsFile) Sort() {
 	})
 }
 
+type RequirementsFileMap struct {
+	Roles []*RequirementsEntry `yaml:"roles"`
+}
+
+// Slice returns the slice of roles from of RequirementsFileMap
+func (rfm *RequirementsFileMap) Slice() RequirementsFile {
+	return rfm.Roles
+}
+
 // parseRequirements parses requirements.yml file and tries to update it
 // if it founds any includes within that file, they will be returned as second return value
 func parseRequirements(path string) (main, additional RequirementsFile) {
@@ -28,7 +37,12 @@ func parseRequirements(path string) (main, additional RequirementsFile) {
 	}
 	var req RequirementsFile
 	if err := yaml.Unmarshal(fileb, &req); err != nil {
-		log("ERROR:", err)
+		var reqMap RequirementsFileMap
+		if err := yaml.Unmarshal(fileb, &reqMap); err == nil {
+			req = reqMap.Slice()
+		} else {
+			log("ERROR:", err)
+		}
 	}
 	req.Sort()
 
