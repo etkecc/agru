@@ -1,15 +1,40 @@
-package main
+package parser
 
 import (
 	"os"
 	"path"
 	"strings"
 	"sync"
+
+	"gitlab.com/etke.cc/int/agru/internal/models"
+	"gitlab.com/etke.cc/int/agru/internal/utils"
 )
 
 var ignoredVersions = map[string]bool{
 	"main":   true,
 	"master": true,
+}
+
+// InstallMissingRoles writes all roles to the target roles dir if role doesn't exist or has different version
+func InstallMissingRoles(rolesPath string, entries models.File, cleanup bool) {
+	_, err := os.Stat(rolesPath)
+	if err != nil && os.IsNotExist(err) {
+		mkerr := os.Mkdir(rolesPath, 0o700)
+		if mkerr != nil {
+			utils.Log("ERROR: cannot create roles path:", mkerr)
+		}
+	}
+	var wg sync.WaitGroup
+	wg.Add(len(entries))
+	for _, entry := range entries {
+		go func(entry *models.Entry, wg *sync.WaitGroup) {
+			if !entry.IsInstalled(rolesPath) {
+				installRole(rolesPath, entry, cleanup)
+			}
+			wg.Done()
+		}(entry, &wg)
+	}
+	wg.Wait()
 }
 
 // getNewVersion checks for newer git tag available on the src's remote
@@ -24,9 +49,9 @@ func getNewVersion(src, version string) string {
 	}
 
 	repo := strings.Replace(src, "git+https", "https", 1)
-	tags, err := execute("git ls-remote -tq --sort=-version:refname "+repo, "")
+	tags, err := utils.Run("git ls-remote -tq --sort=-version:refname "+repo, "")
 	if err != nil {
-		log("ERROR:", err)
+		utils.Log("ERROR:", err)
 		return ""
 	}
 	if tags == "" {
@@ -36,7 +61,7 @@ func getNewVersion(src, version string) string {
 	lastline := strings.Split(tags, "\n")[0]
 	tagidx := strings.Index(lastline, "refs/tags/")
 	if tagidx == -1 {
-		log("ERROR: lastline:", lastline)
+		utils.Log("ERROR: lastline:", lastline)
 		return ""
 	}
 	last := strings.Replace(lastline[tagidx:], "refs/tags/", "", 1)
@@ -55,14 +80,14 @@ func cleanupRole(tmpdir, tmpfile string) {
 }
 
 // installRole writes specific role version to the target roles dir
-func installRole(entry *RequirementsEntry) {
+func installRole(rolesPath string, entry *models.Entry, cleanup bool) {
 	name := entry.GetName()
-	log("installing", name, entry.Version)
+	utils.Log("installing", name, entry.Version)
 
 	repo := strings.Replace(entry.Src, "git+", "", 1)
 	tmpdir, err := os.MkdirTemp("", "agru-"+name+"-*")
 	if err != nil {
-		log("ERROR: cannot create tmp dir:", err)
+		utils.Log("ERROR: cannot create tmp dir:", err)
 		return
 	}
 	tmpfile := tmpdir + ".tar"
@@ -87,10 +112,10 @@ func installRole(entry *RequirementsEntry) {
 	clone.WriteString(repo)
 	clone.WriteString(" ")
 	clone.WriteString(tmpdir)
-	out, err := execute(clone.String(), "")
+	out, err := utils.Run(clone.String(), "")
 	if err != nil {
-		log("ERROR: cannot clone repo:", err)
-		log(out)
+		utils.Log("ERROR: cannot clone repo:", err)
+		utils.Log(out)
 		return
 	}
 
@@ -102,51 +127,29 @@ func installRole(entry *RequirementsEntry) {
 	archive.WriteString(tmpfile)
 	archive.WriteString(" ")
 	archive.WriteString(entry.Version)
-	out, err = execute(archive.String(), tmpdir)
+	out, err = utils.Run(archive.String(), tmpdir)
 	if err != nil {
-		log("ERROR: cannot archive repo:", err)
-		log(out)
+		utils.Log("ERROR: cannot archive repo:", err)
+		utils.Log(out)
 		return
 	}
 
 	// extract the archive into roles path
-	out, err = execute("tar -xf "+tmpfile, rolesPath)
+	out, err = utils.Run("tar -xf "+tmpfile, rolesPath)
 	if err != nil {
-		log("ERROR: cannot extract archive:", err)
-		log(out)
+		utils.Log("ERROR: cannot extract archive:", err)
+		utils.Log(out)
 		return
 	}
 
 	// write install info file
 	outb, err := entry.GenerateInstallInfo()
 	if err != nil {
-		log("ERROR: cannot generate install info:", err)
+		utils.Log("ERROR: cannot generate install info:", err)
 		return
 	}
 	if err := os.WriteFile(path.Join(rolesPath, name, "meta", ".galaxy_install_info"), outb, 0o600); err != nil {
-		log("ERROR: cannot write install info:", err)
+		utils.Log("ERROR: cannot write install info:", err)
 		return
 	}
-}
-
-// installMissingRoles writes all roles to the target roles dir if role doesn't exist or has different version
-func installMissingRoles(entries RequirementsFile) {
-	_, err := os.Stat(rolesPath)
-	if err != nil && os.IsNotExist(err) {
-		mkerr := os.Mkdir(rolesPath, 0o700)
-		if mkerr != nil {
-			log("ERROR: cannot create roles path:", mkerr)
-		}
-	}
-	var wg sync.WaitGroup
-	wg.Add(len(entries))
-	for _, entry := range entries {
-		go func(entry *RequirementsEntry, wg *sync.WaitGroup) {
-			if !entry.IsInstalled() {
-				installRole(entry)
-			}
-			wg.Done()
-		}(entry, &wg)
-	}
-	wg.Wait()
 }

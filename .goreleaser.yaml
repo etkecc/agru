@@ -8,6 +8,7 @@ builds:
       - -extldflags "-static"
     flags:
       - -tags=timetzdata,goolm
+    main: ./cmd/agru
     binary: agru
     goos:
       - linux
