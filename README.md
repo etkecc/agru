@@ -8,7 +8,7 @@
 * [What's the catch?](#whats-the-catch)
     * [only git repos are supported](#only-git-repos-are-supported)
     * [only roles are supported](#only-roles-are-supported)
-    * [only update/install operations are supported](#only-updateinstall-operations-are-supported)
+    * [only list/update/install operations are supported](#only-listupdateinstall-operations-are-supported)
 * [Where to get?](#where-to-get)
     * [Binaries and distro-specific packages](#binaries-and-distro-specific-packages)
     * [Build yourself](#build-yourself)
@@ -37,6 +37,8 @@ Because `ansible-galaxy` is slow, **very** slow. And irrational. And miss some f
 ```
 Usage of agru:
   -c	cleanup temporary files (default true)
+  -i	install missing roles (default true)
+  -l	list installed roles
   -p string
     	path to install roles (default "roles/galaxy/")
   -r string
@@ -69,9 +71,9 @@ does **not** work:
 
 No collections at this moment, at all.
 
-### only update/install operations are supported
+### only list/update/install operations are supported
 
-No list, no role upload to galaxy, no role removal from galaxy.
+No role upload to galaxy, no role removal from galaxy.
 In fact, galaxy API is not used at all, thus no API-related actions are supported
 
 ## Where to get?

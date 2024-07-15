@@ -8,6 +8,10 @@ update *flags:
     go mod tidy
     go mod vendor
 
+# install app
+install:
+    go install ./cmd/agru
+
 # run linter
 lint:
     golangci-lint run ./...

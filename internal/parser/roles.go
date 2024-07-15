@@ -37,6 +37,18 @@ func InstallMissingRoles(rolesPath string, entries models.File, cleanup bool) {
 	wg.Wait()
 }
 
+// GetInstalledRoles returns all roles that are already installed
+func GetInstalledRoles(rolesPath string, entries models.File) models.File {
+	installed := models.File{}
+	for _, entry := range entries {
+		entry := entry
+		if entry.GetInstallInfo(rolesPath).Version != "" {
+			installed = append(installed, entry)
+		}
+	}
+	return installed
+}
+
 // getNewVersion checks for newer git tag available on the src's remote
 func getNewVersion(src, version string) string {
 	if ignoredVersions[version] {
