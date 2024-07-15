@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
+	"path"
 
 	"gitlab.com/etke.cc/int/agru/internal/parser"
 	"gitlab.com/etke.cc/int/agru/internal/utils"
@@ -13,6 +15,7 @@ var (
 	requirementsPath       string
 	updateRequirementsFile bool
 	listInstalled          bool
+	deleteInstalled        string
 	installMissing         bool
 	verbose                bool
 	cleanup                bool
@@ -21,6 +24,7 @@ var (
 func main() {
 	flag.StringVar(&requirementsPath, "r", "requirements.yml", "ansible-galaxy requirements file")
 	flag.StringVar(&rolesPath, "p", "roles/galaxy/", "path to install roles")
+	flag.StringVar(&deleteInstalled, "d", "", "delete installed role, all other flags are ignored")
 	flag.BoolVar(&listInstalled, "l", false, "list installed roles")
 	flag.BoolVar(&installMissing, "i", true, "install missing roles")
 	flag.BoolVar(&updateRequirementsFile, "u", false, "update requirements file if newer versions are available")
@@ -33,9 +37,21 @@ func main() {
 	utils.Log(fmt.Sprintf("\033[1ma\033[0mnsible-\033[1mg\033[0malaxy \033[1mr\033[0mequirements.yml \033[1mu\033[0mpdater (list=%t update=%t cleanup=%t verbose=%t)", listInstalled, updateRequirementsFile, cleanup, verbose))
 	utils.Log("parsing", requirementsPath)
 	entries, installOnly := parser.ParseFile(requirementsPath)
-	if updateRequirementsFile {
-		utils.Log("updating", requirementsPath)
-		parser.UpdateFile(entries, requirementsPath)
+
+	if deleteInstalled != "" {
+		installed := parser.GetInstalledRoles(rolesPath, parser.MergeFiles(entries, installOnly))
+		for _, entry := range installed {
+			if entry.GetName() == deleteInstalled {
+				utils.Log("deleting", entry.GetName())
+				if err := os.RemoveAll(path.Join(rolesPath, entry.GetName())); err != nil {
+					utils.Log("ERROR: cannot delete role:", err)
+				}
+				utils.Log("done")
+				return
+			}
+		}
+		utils.Log("role", deleteInstalled, "not found")
+		return
 	}
 
 	if listInstalled {
@@ -43,6 +59,12 @@ func main() {
 		for _, entry := range installed {
 			fmt.Println("-", entry.GetName()+",", entry.GetInstallInfo(rolesPath).Version)
 		}
+		return
+	}
+
+	if updateRequirementsFile {
+		utils.Log("updating", requirementsPath)
+		parser.UpdateFile(entries, requirementsPath)
 	}
 
 	if installMissing {

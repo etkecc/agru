@@ -8,7 +8,7 @@
 * [What's the catch?](#whats-the-catch)
     * [only git repos are supported](#only-git-repos-are-supported)
     * [only roles are supported](#only-roles-are-supported)
-    * [only list/update/install operations are supported](#only-listupdateinstall-operations-are-supported)
+    * [only list/update/install/remove operations are supported](#only-listupdateinstallremove-operations-are-supported)
 * [Where to get?](#where-to-get)
     * [Binaries and distro-specific packages](#binaries-and-distro-specific-packages)
     * [Build yourself](#build-yourself)
@@ -34,9 +34,11 @@ Because `ansible-galaxy` is slow, **very** slow. And irrational. And miss some f
 
 ## How?
 
-```
+```bash
 Usage of agru:
   -c	cleanup temporary files (default true)
+  -d string
+    	delete installed role, all other flags are ignored
   -i	install missing roles (default true)
   -l	list installed roles
   -p string
@@ -45,6 +47,30 @@ Usage of agru:
     	ansible-galaxy requirements file (default "requirements.yml")
   -u	update requirements file if newer versions are available
   -v	verbose output
+```
+
+**list installed roles**
+
+```bash
+$ agru -l
+```
+
+**install role from the requirements file**
+
+```bash
+$ agru
+```
+
+**update requirements file if newer versions are available**
+
+```bash
+$ agru -u
+```
+
+**remove already installed role**
+
+```bash
+$ agru -d traefik
 ```
 
 ## What's the catch?
@@ -71,10 +97,9 @@ does **not** work:
 
 No collections at this moment, at all.
 
-### only list/update/install operations are supported
+### only list/update/install/remove operations are supported
 
-No role upload to galaxy, no role removal from galaxy.
-In fact, galaxy API is not used at all, thus no API-related actions are supported
+Ansible Galaxy API is not used at all, thus no API-related actions are supported
 
 ## Where to get?
 
