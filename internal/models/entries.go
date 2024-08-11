@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"gitlab.com/etke.cc/int/agru/internal/utils"
 	"gopkg.in/yaml.v3"
+
+	"github.com/etkecc/agru/internal/utils"
 )
 
 // GalaxyInstallInfo is meta/.galaxy_install_info struct

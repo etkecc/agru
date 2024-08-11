@@ -1,4 +1,4 @@
-module gitlab.com/etke.cc/int/agru
+module github.com/etkecc/agru
 
 go 1.22
 

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"sync"
 
-	"gitlab.com/etke.cc/int/agru/internal/models"
-	"gitlab.com/etke.cc/int/agru/internal/utils"
+	"github.com/etkecc/agru/internal/models"
+	"github.com/etkecc/agru/internal/utils"
 )
 
 var ignoredVersions = map[string]bool{

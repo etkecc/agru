@@ -6,8 +6,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"gitlab.com/etke.cc/int/agru/internal/models"
-	"gitlab.com/etke.cc/int/agru/internal/utils"
+	"github.com/etkecc/agru/internal/models"
+	"github.com/etkecc/agru/internal/utils"
 )
 
 // ParseFile parses requirements.yml file

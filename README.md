@@ -105,7 +105,7 @@ Ansible Galaxy API is not used at all, thus no API-related actions are supported
 
 ### Binaries and distro-specific packages
 
-[Releases page](https://gitlab.com/etke.cc/tools/agru/-/releases) and [Arch Linux AUR](https://aur.archlinux.org/packages/agru)
+[Releases page](https://github.com/etkecc/agru/releases) and [Arch Linux AUR](https://aur.archlinux.org/packages/agru)
 
 ### Build yourself
 

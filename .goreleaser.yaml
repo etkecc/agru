@@ -1,6 +1,12 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# vim: set ts=2 sw=2 tw=0 fo=cnqoj
+
+version: 2
+
 before:
   hooks:
     - go mod tidy
+
 builds:
   - env:
       - CGO_ENABLED=0
@@ -8,8 +14,7 @@ builds:
       - -extldflags "-static"
     flags:
       - -tags=timetzdata,goolm
-    main: ./cmd/agru
-    binary: agru
+    main: ./cmd/
     goos:
       - linux
       - windows
@@ -17,20 +22,9 @@ builds:
     goarch:
       - amd64
       - arm64
-nfpms:
-  - vendor: https://etke.cc
-    package_name: agru
-    maintainer: etke.cc
-    description: A.G.R.U. stands for ansible-galaxy requirements updater
-    homepage: https://gitlab.com/etke.cc/tools/agru
-    license: GPL-3.0
-    formats:
-      - deb
-      - rpm
-      - apk
-    file_name_template: "{{ .PackageName }}-{{ .Version }}_{{ .Os }}-{{ .Arch }}"
+
 archives:
-  - format: binary
+  - format: tar.gz
     name_template: >-
       {{ .ProjectName }}_
       {{- title .Os }}_
@@ -38,16 +32,13 @@ archives:
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
-checksum:
-  disable: true
+    format_overrides:
+      - goos: windows
+        format: zip
+
 changelog:
   sort: asc
   filters:
     exclude:
-      - '^docs:'
-      - '^test:'
-
-# The lines beneath this are called `modelines`. See `:help modeline`
-# Feel free to remove those if you don't want/use them.
-# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
-# vim: set ts=2 sw=2 tw=0 fo=cnqoj
+      - "^docs:"
+      - "^test:"

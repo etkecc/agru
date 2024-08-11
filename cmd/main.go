@@ -6,8 +6,8 @@ import (
 	"os"
 	"path"
 
-	"gitlab.com/etke.cc/int/agru/internal/parser"
-	"gitlab.com/etke.cc/int/agru/internal/utils"
+	"github.com/etkecc/agru/internal/parser"
+	"github.com/etkecc/agru/internal/utils"
 )
 
 var (
