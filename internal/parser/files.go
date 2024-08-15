@@ -14,7 +14,7 @@ import (
 func ParseFile(path string) (main, additional models.File) {
 	fileb, err := os.ReadFile(path)
 	if err != nil {
-		utils.Log("ERROR:", err)
+		utils.Log("ERROR: reading file", path, err)
 		return models.File{}, models.File{}
 	}
 	var req models.File
@@ -23,7 +23,7 @@ func ParseFile(path string) (main, additional models.File) {
 		if err := yaml.Unmarshal(fileb, &reqMap); err == nil {
 			req = reqMap.Slice()
 		} else {
-			utils.Log("ERROR:", err)
+			utils.Log("ERROR: unmarshalling yaml", err)
 		}
 	}
 	req.Sort()
@@ -65,12 +65,12 @@ func UpdateFile(entries models.File, requirementsPath string) {
 
 	outb, err := yaml.Marshal(entries)
 	if err != nil {
-		utils.Log("ERROR:", err)
+		utils.Log("ERROR: marshaling yaml", err)
 		return
 	}
 	outb = append([]byte("---\n\n"), outb...) // preserve the separator to make yaml lint happy
 	if err := os.WriteFile(requirementsPath, outb, 0o600); err != nil {
-		utils.Log("ERROR:", err)
+		utils.Log("ERROR: writing file", requirementsPath, err)
 	}
 }
 

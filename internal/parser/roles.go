@@ -63,7 +63,7 @@ func getNewVersion(src, version string) string {
 	repo := strings.Replace(src, "git+https", "https", 1)
 	tags, err := utils.Run("git ls-remote -tq --sort=-version:refname "+repo, "")
 	if err != nil {
-		utils.Log("ERROR:", err)
+		utils.Log("ERROR: git ls-remote", repo, err)
 		return ""
 	}
 	if tags == "" {
