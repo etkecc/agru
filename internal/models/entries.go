@@ -11,6 +11,11 @@ import (
 	"github.com/etkecc/agru/internal/utils"
 )
 
+var forcedVersions = map[string]bool{
+	"main":   true,
+	"master": true,
+}
+
 // GalaxyInstallInfo is meta/.galaxy_install_info struct
 type GalaxyInstallInfo struct {
 	InstallDate string `yaml:"install_date"`
@@ -92,6 +97,10 @@ func (e *Entry) IsInstalled(rolesPath string) bool {
 	}
 
 	if e.Version != e.GetInstallInfo(rolesPath).Version {
+		return false
+	}
+
+	if forcedVersions[e.Version] {
 		return false
 	}
 	return true
