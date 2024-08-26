@@ -28,7 +28,7 @@
 ## Why?
 
 We at [etke.cc](https://etke.cc) developing and maintainining a lot of [Ansible roles](https://github.com/orgs/mother-of-all-self-hosting/repositories) and playbooks ([MDAD](https://github.com/spantaleev/matrix-docker-ansible-deploy), [MASH](https://github.com/mother-of-all-self-hosting/mash-playbook), [etke.cc](https://gitlab.com/etke.cc/ansible/)).
-And we developed A.G.R.U., because `ansible-galaxy` is slow, **very** slow. And irrational. And miss some functions.
+And we developed A.G.R.U., because `ansible-galaxy` is slow, **very** slow. And irrational. And it misses some functions.
 
 * You updated some role's version in requirements file? Sorry, `ansible-galaxy install -r requirements.yml -p roles/galaxy/` can't install it, you have to use `--force` or remove the dir manually. A.G.R.U. does that automatically
 * You have 100500 roles in your requirements file and you have to manually check each of them if a newer tag is available? A.G.R.U. does that automatically
