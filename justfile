@@ -4,7 +4,7 @@ default:
 
 # update go deps
 update *flags:
-    go get {{ flags }} ./cmd
+    go get {{ flags }} ./cmd/agru
     go mod tidy
     go mod vendor
 
@@ -28,8 +28,12 @@ test packages="./...":
 
 # run app
 run:
-    @go run ./cmd
+    @go run ./cmd/agru
+
+# install app
+install:
+    @CGO_ENABLED=0 go install -ldflags '-extldflags "-static"' -tags timetzdata,goolm -v ./cmd/agru
 
 # build app
 build:
-    CGO_ENABLED=0 go build -ldflags '-extldflags "-static"' -tags timetzdata,goolm -v -o agru ./cmd
+    @CGO_ENABLED=0 go build -ldflags '-extldflags "-static"' -tags timetzdata,goolm -v ./cmd/agru

@@ -18,8 +18,9 @@ var forcedVersions = map[string]bool{
 
 // GalaxyInstallInfo is meta/.galaxy_install_info struct
 type GalaxyInstallInfo struct {
-	InstallDate string `yaml:"install_date"`
-	Version     string `yaml:"version"`
+	InstallDate   string `yaml:"install_date"`
+	InstallCommit string `yaml:"install_commit,omitempty"` // commit hash, agru's own field to help with versions like main, master
+	Version       string `yaml:"version"`
 }
 
 // Entry is requirements.yml's entry structure
@@ -81,10 +82,11 @@ func (e *Entry) GetInstallInfo(rolesPath string) GalaxyInstallInfo {
 }
 
 // GenerateInstallInfo generates fresh install info from current state of the entry struct
-func (e *Entry) GenerateInstallInfo() ([]byte, error) {
+func (e *Entry) GenerateInstallInfo(commitSHA string) ([]byte, error) {
 	info := GalaxyInstallInfo{
-		InstallDate: time.Now().Format("Mon 02 Jan 2006 03:04:05 PM "), // the trailing space is done by ansible-galaxy
-		Version:     e.Version,
+		InstallDate:   time.Now().UTC().Format("Mon 02 Jan 2006 03:04:05 PM "), // the trailing space is done by ansible-galaxy
+		InstallCommit: commitSHA,
+		Version:       e.Version,
 	}
 	return yaml.Marshal(info)
 }

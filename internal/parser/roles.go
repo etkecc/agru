@@ -41,7 +41,6 @@ func InstallMissingRoles(rolesPath string, entries models.File, cleanup bool) {
 func GetInstalledRoles(rolesPath string, entries models.File) models.File {
 	installed := models.File{}
 	for _, entry := range entries {
-		entry := entry
 		if entry.GetInstallInfo(rolesPath).Version != "" {
 			installed = append(installed, entry)
 		}
@@ -131,6 +130,19 @@ func installRole(rolesPath string, entry *models.Entry, cleanup bool) {
 		return
 	}
 
+	sha, err := utils.Run("git rev-parse HEAD", tmpdir)
+	if err != nil {
+		utils.Log("ERROR: cannot get commit hash:", err)
+		return
+	}
+
+	// check if the role is already installed
+	installedCommit := entry.GetInstallInfo(rolesPath).InstallCommit
+	if sha != "" && installedCommit != "" && sha == entry.GetInstallInfo(rolesPath).InstallCommit {
+		utils.Debug(name, "is already up to date")
+		return
+	}
+
 	// create archive from the cloned source
 	var archive strings.Builder
 	archive.WriteString("git archive --prefix=")
@@ -155,7 +167,7 @@ func installRole(rolesPath string, entry *models.Entry, cleanup bool) {
 	}
 
 	// write install info file
-	outb, err := entry.GenerateInstallInfo()
+	outb, err := entry.GenerateInstallInfo(sha)
 	if err != nil {
 		utils.Log("ERROR: cannot generate install info:", err)
 		return
