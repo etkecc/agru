@@ -48,13 +48,14 @@ func parseAdditionalFile(req models.File) models.File {
 
 // UpdateFile updates the requirements.yml file
 func UpdateFile(entries models.File, requirementsPath string) {
+	changes := models.UpdatedItems{}
 	var wg sync.WaitGroup
 	wg.Add(len(entries))
 	for i, entry := range entries {
 		go func(i int, entry *models.Entry, wg *sync.WaitGroup) {
 			newVersion := getNewVersion(entry.Src, entry.Version)
 			if newVersion != "" {
-				utils.Log(entry.Src, entry.Version, "->", newVersion)
+				changes = changes.Add(entry.GetName(), entry.Version, newVersion)
 				entry.Version = newVersion
 				entries[i] = entry
 			}
@@ -62,6 +63,10 @@ func UpdateFile(entries models.File, requirementsPath string) {
 		}(i, entry, &wg)
 	}
 	wg.Wait()
+
+	if len(changes) > 0 {
+		utils.Log(changes.String("requirements changes: "))
+	}
 
 	outb, err := yaml.Marshal(entries)
 	if err != nil {

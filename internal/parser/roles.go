@@ -25,16 +25,24 @@ func InstallMissingRoles(rolesPath string, entries models.File, cleanup bool) {
 		}
 	}
 	var wg sync.WaitGroup
+	changes := models.UpdatedItems{}
 	wg.Add(len(entries))
 	for _, entry := range entries {
 		go func(entry *models.Entry, wg *sync.WaitGroup) {
 			if !entry.IsInstalled(rolesPath) {
+				if !ignoredVersions[entry.Version] {
+					changes = changes.Add(entry.GetName(), entry.GetInstallInfo(rolesPath).Version, entry.Version)
+				}
 				installRole(rolesPath, entry, cleanup)
 			}
 			wg.Done()
 		}(entry, &wg)
 	}
 	wg.Wait()
+
+	if len(changes) > 0 {
+		utils.Log(changes.String("roles updated: "))
+	}
 }
 
 // GetInstalledRoles returns all roles that are already installed
