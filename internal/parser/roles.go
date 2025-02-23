@@ -5,9 +5,17 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/etkecc/agru/internal/models"
 	"github.com/etkecc/agru/internal/utils"
+)
+
+const (
+	// RetriesMax is the maximum number of retries for git operations
+	RetriesMax = 5
+	// RetryStepDelay is the delay between retry attempts (exponential backoff)
+	RetryStepDelay = 1 * time.Second
 )
 
 var ignoredVersions = map[string]bool{
@@ -98,6 +106,30 @@ func cleanupRole(tmpdir, tmpfile string) {
 	os.Remove(tmpfile)
 }
 
+func runClone(cmd string, currentAttempt ...int) (string, error) {
+	attempt := 0
+	if len(currentAttempt) > 0 {
+		attempt = currentAttempt[0]
+	}
+
+	out, err := utils.Run(cmd, "")
+	if err == nil {
+		return out, nil
+	}
+
+	// fatal: unable to access 'https://github.com/user/repo.git/': Failed to connect to github.com port 443 after 135428 ms: Couldn't connect to server
+	if strings.Contains(out, "Couldn't connect to server") && attempt < RetriesMax {
+		delay := RetryStepDelay * time.Duration(attempt)
+		utils.Log("ERROR: cannot clone repo, retrying in", delay.String(), out)
+		time.Sleep(delay)
+		return runClone(cmd, attempt+1)
+	}
+
+	utils.Log("ERROR: cannot clone repo:", err)
+	utils.Log(out)
+	return out, err
+}
+
 // installRole writes specific role version to the target roles dir
 func installRole(rolesPath string, entry *models.Entry, cleanup bool) {
 	name := entry.GetName()
@@ -131,7 +163,7 @@ func installRole(rolesPath string, entry *models.Entry, cleanup bool) {
 	clone.WriteString(repo)
 	clone.WriteString(" ")
 	clone.WriteString(tmpdir)
-	out, err := utils.Run(clone.String(), "")
+	out, err := runClone(clone.String())
 	if err != nil {
 		utils.Log("ERROR: cannot clone repo:", err)
 		utils.Log(out)
