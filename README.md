@@ -46,6 +46,8 @@ Usage of agru:
     	delete installed role, all other flags are ignored
   -i	install missing roles (default true)
   -l	list installed roles
+  -limit int
+    	limit the number of parallel downloads (affects roles installation only). 0 - no limit (default)
   -p string
     	path to install roles (default "roles/galaxy/")
   -r string

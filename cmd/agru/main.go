@@ -17,6 +17,7 @@ var (
 	listInstalled          bool
 	deleteInstalled        string
 	installMissing         bool
+	limit                  int
 	verbose                bool
 	cleanup                bool
 )
@@ -25,6 +26,7 @@ func main() {
 	flag.StringVar(&requirementsPath, "r", "requirements.yml", "ansible-galaxy requirements file")
 	flag.StringVar(&rolesPath, "p", "roles/galaxy/", "path to install roles")
 	flag.StringVar(&deleteInstalled, "d", "", "delete installed role, all other flags are ignored")
+	flag.IntVar(&limit, "limit", 0, "limit the number of parallel downloads (affects roles installation only). 0 - no limit (default)")
 	flag.BoolVar(&listInstalled, "l", false, "list installed roles")
 	flag.BoolVar(&installMissing, "i", true, "install missing roles")
 	flag.BoolVar(&updateRequirementsFile, "u", false, "update requirements file if newer versions are available")
@@ -69,7 +71,7 @@ func main() {
 
 	if installMissing {
 		utils.Log("installing/updating roles (if any)")
-		parser.InstallMissingRoles(rolesPath, parser.MergeFiles(entries, installOnly), cleanup)
+		parser.InstallMissingRoles(rolesPath, parser.MergeFiles(entries, installOnly), limit, cleanup)
 	}
 
 	utils.Log("done")

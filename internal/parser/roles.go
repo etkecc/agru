@@ -4,8 +4,9 @@ import (
 	"os"
 	"path"
 	"strings"
-	"sync"
 	"time"
+
+	"github.com/etkecc/go-kit/workpool"
 
 	"github.com/etkecc/agru/internal/models"
 	"github.com/etkecc/agru/internal/utils"
@@ -24,7 +25,7 @@ var ignoredVersions = map[string]bool{
 }
 
 // InstallMissingRoles writes all roles to the target roles dir if role doesn't exist or has different version
-func InstallMissingRoles(rolesPath string, entries models.File, cleanup bool) {
+func InstallMissingRoles(rolesPath string, entries models.File, limit int, cleanup bool) {
 	_, err := os.Stat(rolesPath)
 	if err != nil && os.IsNotExist(err) {
 		mkerr := os.Mkdir(rolesPath, 0o700)
@@ -32,21 +33,24 @@ func InstallMissingRoles(rolesPath string, entries models.File, cleanup bool) {
 			utils.Log("ERROR: cannot create roles path:", mkerr)
 		}
 	}
-	var wg sync.WaitGroup
-	changes := models.UpdatedItems{}
-	wg.Add(len(entries))
-	for _, entry := range entries {
-		go func(entry *models.Entry, wg *sync.WaitGroup) {
-			if !entry.IsInstalled(rolesPath) {
-				if !ignoredVersions[entry.Version] {
-					changes = changes.Add(entry.GetName(), entry.GetInstallInfo(rolesPath).Version, entry.Version)
-				}
-				installRole(rolesPath, entry, cleanup)
-			}
-			wg.Done()
-		}(entry, &wg)
+	// if limit is 0, then no limit
+	if limit == 0 {
+		limit = len(entries)
 	}
-	wg.Wait()
+	wp := workpool.New(limit)
+	changes := models.UpdatedItems{}
+	for _, entry := range entries {
+		item := entry
+		wp.Do(func() {
+			if !item.IsInstalled(rolesPath) {
+				if !ignoredVersions[item.Version] {
+					changes = changes.Add(item.GetName(), item.GetInstallInfo(rolesPath).Version, item.Version)
+				}
+				installRole(rolesPath, item, cleanup)
+			}
+		})
+	}
+	wp.Run()
 
 	if len(changes) > 0 {
 		utils.Log(changes.String("roles updated: "))
