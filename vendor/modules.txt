@@ -1,4 +1,4 @@
-# github.com/etkecc/go-kit v1.5.0
+# github.com/etkecc/go-kit v1.7.1
 ## explicit; go 1.22
 github.com/etkecc/go-kit/workpool
 # gopkg.in/yaml.v3 v3.0.1
