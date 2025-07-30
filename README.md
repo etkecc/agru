@@ -122,6 +122,6 @@ Ansible Galaxy API is not used at all, thus no API-related actions are supported
 
 - [Matrix Docker Ansible Deploy (MDAD)](https://github.com/spantaleev/matrix-docker-ansible-deploy)
 - [Mother of All Self-Hosting (MASH)](https://github.com/mother-of-all-self-hosting/mash-playbook)
-- [etke.cc](https://gitlab.com/etke.cc/ansible/)
+- [etke.cc](https://github.com/etkecc/ansible)
 
 If you use A.G.R.U. in your project, please let us know by creating an issue or PR with your project link.
