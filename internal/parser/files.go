@@ -71,7 +71,7 @@ func UpdateFile(entries models.File, requirementsPath string) {
 	wg.Wait()
 
 	if len(changes) > 0 {
-		utils.Log(changes.String("requirements changes: "))
+		utils.Log(changes.String("requirements changes:\n"))
 	}
 
 	outb, err := yaml.Marshal(entries)

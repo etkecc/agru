@@ -58,7 +58,7 @@ func InstallMissingRoles(rolesPath string, entries models.File, limit int, clean
 	wp.Run()
 
 	if len(changes) > 0 {
-		utils.Log(changes.String("roles updated: "))
+		utils.Log(changes.String("roles updated:\n"))
 	}
 }
 

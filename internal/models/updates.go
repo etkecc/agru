@@ -29,20 +29,20 @@ func (u UpdatedItems) String(prefix string) string {
 	var msg strings.Builder
 	for _, item := range u {
 		if item.OldVersion == "" {
-			msg.WriteString("added ")
+			msg.WriteString("* added ")
 			msg.WriteString(item.Role)
 			msg.WriteString(" (")
 			msg.WriteString(item.NewVersion)
-			msg.WriteString("); ")
+			msg.WriteString(")\n")
 			continue
 		}
-		msg.WriteString("updated ")
+		msg.WriteString("* updated ")
 		msg.WriteString(item.Role)
 		msg.WriteString(" (")
 		msg.WriteString(item.OldVersion)
 		msg.WriteString(" -> ")
 		msg.WriteString(item.NewVersion)
-		msg.WriteString("); ")
+		msg.WriteString(")\n")
 	}
 	return prefix + msg.String()
 }
