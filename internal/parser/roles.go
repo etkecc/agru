@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"strings"
@@ -37,11 +38,15 @@ func InstallMissingRoles(rolesPath string, entries models.File, limit int, clean
 	if limit == 0 {
 		limit = len(entries)
 	}
+	bar := utils.NewProgressbar(len(entries), "installing roles")
 	wp := workpool.New(limit)
 	changes := models.UpdatedItems{}
 	for _, entry := range entries {
 		item := entry
 		wp.Do(func() {
+			defer bar.Add(1)                                                                  //nolint:errcheck // don't care about error here
+			defer bar.AddDetail(fmt.Sprintf("installed %s@%s", item.GetName(), item.Version)) //nolint:errcheck // don't care about error here
+
 			if !item.IsInstalled(rolesPath) {
 				if !ignoredVersions[item.Version] {
 					changes = changes.Add(item.GetName(), item.GetInstallInfo(rolesPath).Version, item.Version)
@@ -137,7 +142,6 @@ func runClone(cmd string, currentAttempt ...int) (string, error) {
 // installRole writes specific role version to the target roles dir
 func installRole(rolesPath string, entry *models.Entry, cleanup bool) {
 	name := entry.GetName()
-	utils.Log("installing", name, entry.Version)
 
 	repo := strings.Replace(entry.Src, "git+", "", 1)
 	tmpdir, err := os.MkdirTemp("", "agru-"+name+"-*")
