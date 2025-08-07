@@ -12,6 +12,17 @@ func (r File) Sort() {
 	})
 }
 
+// Roles returns a new File containing only the entries that are actual roles (i.e., those without an include directive)
+func (r File) Roles() File {
+	roles := File{}
+	for _, entry := range r {
+		if entry.Include == "" { // only roles without include directive
+			roles = append(roles, entry)
+		}
+	}
+	return roles
+}
+
 // FileMap structure represents requirements.yml file with roles key
 type FileMap struct {
 	Roles []*Entry `yaml:"roles"`

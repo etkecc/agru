@@ -6,7 +6,7 @@ toolchain go1.24.5
 
 require (
 	github.com/etkecc/go-kit v1.7.1
-	github.com/schollz/progressbar/v3 v3.18.0
+	github.com/schollz/progressbar/v3 v3.18.1-0.20250208003819-1a5d48397714
 	gopkg.in/yaml.v3 v3.0.1
 )
 

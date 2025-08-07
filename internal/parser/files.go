@@ -49,10 +49,11 @@ func parseAdditionalFile(req models.File) models.File {
 // UpdateFile updates the requirements.yml file
 func UpdateFile(entries models.File, requirementsPath string) {
 	changes := models.UpdatedItems{}
-	bar := utils.NewProgressbar(len(entries), "updating requirements file")
+	roles := entries.Roles()
+	bar := utils.NewProgressbar(len(roles), "updating requirements file")
 	var wg sync.WaitGroup
-	wg.Add(len(entries))
-	for i, entry := range entries {
+	wg.Add(len(roles))
+	for i, entry := range roles {
 		go func(i int, entry *models.Entry, wg *sync.WaitGroup) {
 			defer bar.Add(1) //nolint:errcheck // don't care about error here
 
@@ -62,8 +63,6 @@ func UpdateFile(entries models.File, requirementsPath string) {
 				bar.AddDetail("updated " + entry.GetName() + " " + entry.Version + " -> " + newVersion) //nolint:errcheck // don't care about error here
 				entry.Version = newVersion
 				entries[i] = entry
-			} else {
-				bar.AddDetail("no update for " + entry.GetName() + "@" + entry.Version) //nolint:errcheck // don't care about error here
 			}
 			wg.Done()
 		}(i, entry, &wg)

@@ -27,31 +27,27 @@ var ignoredVersions = map[string]bool{
 
 // InstallMissingRoles writes all roles to the target roles dir if role doesn't exist or has different version
 func InstallMissingRoles(rolesPath string, entries models.File, limit int, cleanup bool) {
-	_, err := os.Stat(rolesPath)
-	if err != nil && os.IsNotExist(err) {
-		mkerr := os.Mkdir(rolesPath, 0o700)
-		if mkerr != nil {
-			utils.Log("ERROR: cannot create roles path:", mkerr)
-		}
-	}
+	bootstrapRoles(rolesPath)
+	roles := entries.Roles()
 	// if limit is 0, then no limit
 	if limit == 0 {
-		limit = len(entries)
+		limit = len(roles)
 	}
-	bar := utils.NewProgressbar(len(entries), "installing roles")
+	bar := utils.NewProgressbar(len(roles), "installing roles")
 	wp := workpool.New(limit)
 	changes := models.UpdatedItems{}
-	for _, entry := range entries {
+	for _, entry := range roles {
 		item := entry
 		wp.Do(func() {
-			defer bar.Add(1)                                                                  //nolint:errcheck // don't care about error here
-			defer bar.AddDetail(fmt.Sprintf("installed %s@%s", item.GetName(), item.Version)) //nolint:errcheck // don't care about error here
+			defer bar.Add(1) //nolint:errcheck // don't care about error here
 
 			if !item.IsInstalled(rolesPath) {
 				if !ignoredVersions[item.Version] {
 					changes = changes.Add(item.GetName(), item.GetInstallInfo(rolesPath).Version, item.Version)
 				}
-				installRole(rolesPath, item, cleanup)
+				if installRole(rolesPath, item, cleanup) {
+					bar.AddDetail(fmt.Sprintf("installed %s@%s", item.GetName(), item.Version)) //nolint:errcheck // don't care about error here
+				}
 			}
 		})
 	}
@@ -140,14 +136,14 @@ func runClone(cmd string, currentAttempt ...int) (string, error) {
 }
 
 // installRole writes specific role version to the target roles dir
-func installRole(rolesPath string, entry *models.Entry, cleanup bool) {
+func installRole(rolesPath string, entry *models.Entry, cleanup bool) bool {
 	name := entry.GetName()
 
 	repo := strings.Replace(entry.Src, "git+", "", 1)
 	tmpdir, err := os.MkdirTemp("", "agru-"+name+"-*")
 	if err != nil {
 		utils.Log("ERROR: cannot create tmp dir:", err)
-		return
+		return false
 	}
 	tmpfile := tmpdir + ".tar"
 	if cleanup {
@@ -175,20 +171,20 @@ func installRole(rolesPath string, entry *models.Entry, cleanup bool) {
 	if err != nil {
 		utils.Log("ERROR: cannot clone repo:", err)
 		utils.Log(out)
-		return
+		return false
 	}
 
 	sha, err := utils.Run("git rev-parse HEAD", tmpdir)
 	if err != nil {
 		utils.Log("ERROR: cannot get commit hash:", err)
-		return
+		return false
 	}
 
 	// check if the role is already installed
 	installedCommit := entry.GetInstallInfo(rolesPath).InstallCommit
 	if sha != "" && installedCommit != "" && sha == entry.GetInstallInfo(rolesPath).InstallCommit {
 		utils.Debug(name, "is already up to date")
-		return
+		return false
 	}
 
 	// create archive from the cloned source
@@ -203,7 +199,7 @@ func installRole(rolesPath string, entry *models.Entry, cleanup bool) {
 	if err != nil {
 		utils.Log("ERROR: cannot archive repo:", err)
 		utils.Log(out)
-		return
+		return false
 	}
 
 	// extract the archive into roles path
@@ -211,17 +207,30 @@ func installRole(rolesPath string, entry *models.Entry, cleanup bool) {
 	if err != nil {
 		utils.Log("ERROR: cannot extract archive:", err)
 		utils.Log(out)
-		return
+		return false
 	}
 
 	// write install info file
 	outb, err := entry.GenerateInstallInfo(sha)
 	if err != nil {
 		utils.Log("ERROR: cannot generate install info:", err)
-		return
+		return false
 	}
 	if err := os.WriteFile(path.Join(rolesPath, name, "meta", ".galaxy_install_info"), outb, 0o600); err != nil {
 		utils.Log("ERROR: cannot write install info:", err)
-		return
+		return false
+	}
+
+	return true
+}
+
+// bootstrapRoles creates the roles directory if it doesn't exist
+func bootstrapRoles(rolesPath string) {
+	_, err := os.Stat(rolesPath)
+	if err != nil && os.IsNotExist(err) {
+		mkerr := os.Mkdir(rolesPath, 0o700)
+		if mkerr != nil {
+			utils.Log("ERROR: cannot create roles path:", mkerr)
+		}
 	}
 }
