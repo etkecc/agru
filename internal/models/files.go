@@ -12,15 +12,29 @@ func (r File) Sort() {
 	})
 }
 
-// Roles returns a new File containing only the entries that are actual roles (i.e., those without an include directive)
-func (r File) Roles() File {
-	roles := File{}
+// Deduplicate removes duplicate entries by name, keeping the first occurrence
+func (r File) Deduplicate() File {
+	seen := make(map[string]bool)
+	result := File{}
 	for _, entry := range r {
-		if entry.Include == "" { // only roles without include directive
-			roles = append(roles, entry)
+		name := entry.GetName()
+		if !seen[name] {
+			seen[name] = true
+			result = append(result, entry)
 		}
 	}
-	return roles
+	return result
+}
+
+// RolesLen returns the number of roles without include directive
+func (r File) RolesLen() int {
+	var size int
+	for _, entry := range r {
+		if entry.Include == "" { // only roles without include directive
+			size++
+		}
+	}
+	return size
 }
 
 // FileMap structure represents requirements.yml file with roles key

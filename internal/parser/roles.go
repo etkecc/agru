@@ -26,27 +26,31 @@ var ignoredVersions = map[string]bool{
 }
 
 // InstallMissingRoles writes all roles to the target roles dir if role doesn't exist or has different version
+//
+//nolint:gocognit // TODO: refactor
 func InstallMissingRoles(rolesPath string, entries models.File, limit int, cleanup bool) {
 	bootstrapRoles(rolesPath)
-	roles := entries.Roles()
+	rolesLen := entries.RolesLen()
 	// if limit is 0, then no limit
 	if limit == 0 {
-		limit = len(roles)
+		limit = rolesLen
 	}
-	bar := utils.NewProgressbar(len(roles), "installing roles")
+	bar := utils.NewProgressbar(rolesLen, "installing roles")
 	wp := workpool.New(limit)
 	changes := models.UpdatedItems{}
-	for _, entry := range roles {
-		item := entry
+	for _, entry := range entries {
+		if entry.Include != "" { // skip entries with include directive
+			continue
+		}
 		wp.Do(func() {
 			defer bar.Add(1) //nolint:errcheck // don't care about error here
 
-			if !item.IsInstalled(rolesPath) {
-				if !ignoredVersions[item.Version] {
-					changes = changes.Add(item.GetName(), item.GetInstallInfo(rolesPath).Version, item.Version)
+			if !entry.IsInstalled(rolesPath) {
+				if !ignoredVersions[entry.Version] {
+					changes = changes.Add(entry.GetName(), entry.GetInstallInfo(rolesPath).Version, entry.Version)
 				}
-				if installRole(rolesPath, item, cleanup) {
-					bar.AddDetail(fmt.Sprintf("installed %s@%s", item.GetName(), item.Version)) //nolint:errcheck // don't care about error here
+				if installRole(rolesPath, entry, cleanup) {
+					bar.AddDetail(fmt.Sprintf("installed %s@%s", entry.GetName(), entry.Version)) //nolint:errcheck // don't care about error here
 				}
 			}
 		})

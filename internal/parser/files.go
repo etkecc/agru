@@ -26,6 +26,7 @@ func ParseFile(path string) (main, additional models.File) {
 			utils.Log("ERROR: unmarshalling yaml", err)
 		}
 	}
+	req = req.Deduplicate()
 	req.Sort()
 
 	return req, parseAdditionalFile(req)
@@ -49,11 +50,13 @@ func parseAdditionalFile(req models.File) models.File {
 // UpdateFile updates the requirements.yml file
 func UpdateFile(entries models.File, requirementsPath string) {
 	changes := models.UpdatedItems{}
-	roles := entries.Roles()
-	bar := utils.NewProgressbar(len(roles), "updating requirements file")
+	bar := utils.NewProgressbar(entries.RolesLen(), "updating requirements file")
 	var wg sync.WaitGroup
-	wg.Add(len(roles))
-	for i, entry := range roles {
+	for i, entry := range entries {
+		if entry.Include != "" { // skip entries with include directive
+			continue
+		}
+		wg.Add(1)
 		go func(i int, entry *models.Entry, wg *sync.WaitGroup) {
 			defer bar.Add(1) //nolint:errcheck // don't care about error here
 

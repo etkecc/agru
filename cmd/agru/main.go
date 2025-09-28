@@ -47,6 +47,7 @@ func main() {
 				utils.Log("deleting", entry.GetName())
 				if err := os.RemoveAll(path.Join(rolesPath, entry.GetName())); err != nil {
 					utils.Log("ERROR: cannot delete role:", err)
+					return
 				}
 				utils.Log("done")
 				return
