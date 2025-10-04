@@ -1,7 +1,9 @@
 package parser
 
 import (
+	"fmt"
 	"os"
+	"strings"
 	"sync"
 
 	"gopkg.in/yaml.v3"
@@ -11,80 +13,109 @@ import (
 )
 
 // ParseFile parses requirements.yml file
-func ParseFile(path string) (main, additional models.File) {
+func ParseFile(path string) (main, additional models.File, err error) {
 	fileb, err := os.ReadFile(path)
 	if err != nil {
-		utils.Log("ERROR: reading file", path, err)
-		return models.File{}, models.File{}
+		return models.File{}, models.File{}, fmt.Errorf("reading file %s: %w", path, err)
 	}
 	var req models.File
 	if err := yaml.Unmarshal(fileb, &req); err != nil {
 		var reqMap models.FileMap
-		if err := yaml.Unmarshal(fileb, &reqMap); err == nil {
-			req = reqMap.Slice()
-		} else {
-			utils.Log("ERROR: unmarshalling yaml", err)
+		if err := yaml.Unmarshal(fileb, &reqMap); err != nil {
+			return models.File{}, models.File{}, fmt.Errorf("unmarshalling yaml %s: %w", path, err)
 		}
+		req = reqMap.Slice()
 	}
 	req = req.Deduplicate()
 	req.Sort()
 
-	return req, parseAdditionalFile(req)
+	additional, err = parseAdditionalFile(req)
+	if err != nil {
+		return models.File{}, models.File{}, fmt.Errorf("parsing additional file: %w", err)
+	}
+
+	return req, additional, nil
 }
 
 // parseAdditionalFile parses additional requirements.yml files
-func parseAdditionalFile(req models.File) models.File {
+func parseAdditionalFile(req models.File) (models.File, error) {
 	additional := make([]*models.Entry, 0)
 	for _, entry := range req {
 		if entry.Include != "" {
 			// no recursive iteration over deeper levels, because it's not used anywhere
-			additionalLvl1, additionalLvl2 := ParseFile(entry.Include)
+			additionalLvl1, additionalLvl2, err := ParseFile(entry.Include)
+			if err != nil {
+				return nil, err
+			}
 			additional = append(additional, additionalLvl1...)
 			additional = append(additional, additionalLvl2...)
 		}
 	}
 
-	return additional
+	return additional, nil
 }
 
 // UpdateFile updates the requirements.yml file
-func UpdateFile(entries models.File, requirementsPath string) {
+//
+//nolint:gocognit // TODO: refactor
+func UpdateFile(entries models.File, requirementsPath string) error {
 	changes := models.UpdatedItems{}
 	bar := utils.NewProgressbar(entries.RolesLen(), "updating requirements file")
+	errchan := make(chan error, entries.RolesLen())
+	errs := []error{}
+	go func(errchan chan error) {
+		for err := range errchan {
+			errs = append(errs, err)
+		}
+	}(errchan)
+
 	var wg sync.WaitGroup
 	for i, entry := range entries {
 		if entry.Include != "" { // skip entries with include directive
 			continue
 		}
 		wg.Add(1)
-		go func(i int, entry *models.Entry, wg *sync.WaitGroup) {
+		go func(i int, entry *models.Entry, wg *sync.WaitGroup, errchan chan error) {
+			defer wg.Done()
 			defer bar.Add(1) //nolint:errcheck // don't care about error here
 
-			newVersion := getNewVersion(entry.Src, entry.Version)
+			newVersion, err := getNewVersion(entry.Src, entry.Version)
+			if err != nil {
+				errchan <- fmt.Errorf("getting new version for %s@%s: %w", entry.GetName(), entry.Version, err)
+				bar.AddDetail(fmt.Sprintf("failed %s@%s", entry.GetName(), entry.Version)) //nolint:errcheck // don't care about error here
+				return
+			}
 			if newVersion != "" {
 				changes = changes.Add(entry.GetName(), entry.Version, newVersion)
 				bar.AddDetail("updated " + entry.GetName() + " " + entry.Version + " -> " + newVersion) //nolint:errcheck // don't care about error here
 				entry.Version = newVersion
 				entries[i] = entry
 			}
-			wg.Done()
-		}(i, entry, &wg)
+		}(i, entry, &wg, errchan)
 	}
 	wg.Wait()
 
 	if len(changes) > 0 {
 		utils.Log(changes.String("requirements changes:\n"))
 	}
+	close(errchan)
+	if len(errs) > 0 {
+		errStrs := []string{}
+		for _, err := range errs {
+			errStrs = append(errStrs, err.Error())
+		}
+		return fmt.Errorf("errors occurred during updating:\n%s", strings.Join(errStrs, "\n"))
+	}
 
 	outb, err := yaml.Marshal(entries)
 	if err != nil {
-		utils.Log("ERROR: marshaling yaml", err)
-		return
+		return fmt.Errorf("marshaling yaml: %w", err)
 	}
 	outb = append([]byte("---\n\n"), outb...) // preserve the separator to make yaml lint happy
 	if err := os.WriteFile(requirementsPath, outb, 0o600); err != nil {
-		utils.Log("ERROR: writing file", requirementsPath, err)
+		return fmt.Errorf("writing file %s: %w", requirementsPath, err)
 	}
+	return nil
 }
 
 // MergeFiles merges all requirements.yml files entries into one slice,
