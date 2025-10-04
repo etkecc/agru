@@ -60,12 +60,13 @@ func InstallMissingRoles(rolesPath string, entries models.File, limit int, clean
 
 			if !entry.IsInstalled(rolesPath) {
 				ok, err := installRole(rolesPath, entry, cleanup)
+				if ok {
+					bar.AddDetail(fmt.Sprintf("installed %s@%s", entry.GetName(), entry.Version)) //nolint:errcheck // don't care about error here
+				}
 				if err != nil {
 					errchan <- fmt.Errorf("installing %s@%s: %w", entry.GetName(), entry.Version, err)
 					bar.AddDetail(fmt.Sprintf("failed %s@%s", entry.GetName(), entry.Version)) //nolint:errcheck // don't care about error here
-				}
-				if ok {
-					bar.AddDetail(fmt.Sprintf("installed %s@%s", entry.GetName(), entry.Version)) //nolint:errcheck // don't care about error here
+					return
 				}
 				if !ignoredVersions[entry.Version] {
 					changes = changes.Add(entry.GetName(), entry.GetInstallInfo(rolesPath).Version, entry.Version)
