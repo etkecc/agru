@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -803,6 +804,13 @@ func (p *ProgressBar) Describe(description string) {
 	if p.config.invisible {
 		return
 	}
+	// if already finished, re-render with the new description
+	if p.state.finished && !p.config.clearOnFinish && !p.config.useANSICodes {
+		clearProgressBar(p.config, p.state)
+		io.Copy(p.config.writer, &p.config.stdBuffer)
+		renderProgressBar(p.config, &p.state)
+		return
+	}
 	p.render()
 }
 
@@ -1373,6 +1381,9 @@ func clearProgressBar(c config, s state) error {
 	// fill the empty content
 	// to overwrite the progress bar and jump
 	// back to the beginning of the line
+	if runtime.GOOS == "windows" {
+		return writeString(c, "\r")
+	}
 	str := fmt.Sprintf("\r%s\r", strings.Repeat(" ", s.maxLineWidth))
 	return writeString(c, str)
 	// the following does not show correctly if the previous line is longer than subsequent line
