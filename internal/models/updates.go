@@ -28,7 +28,7 @@ func (u UpdatedItems) String(prefix string) string {
 
 	var msg strings.Builder
 	for _, item := range u {
-		if item.OldVersion == "" {
+		if item.OldVersion == "" || item.OldVersion == item.NewVersion {
 			msg.WriteString("* added ")
 			msg.WriteString(item.Role)
 			msg.WriteString(" (")

@@ -58,19 +58,22 @@ func InstallMissingRoles(rolesPath string, entries models.File, limit int, clean
 		wp.Do(func() {
 			defer bar.Add(1) //nolint:errcheck // don't care about error here
 
-			if !entry.IsInstalled(rolesPath) {
-				ok, err := installRole(rolesPath, entry, cleanup)
-				if ok {
-					bar.AddDetail(fmt.Sprintf("installed %s@%s", entry.GetName(), entry.Version)) //nolint:errcheck // don't care about error here
-				}
-				if err != nil {
-					errchan <- fmt.Errorf("installing %s@%s: %w", entry.GetName(), entry.Version, err)
-					bar.AddDetail(fmt.Sprintf("failed %s@%s", entry.GetName(), entry.Version)) //nolint:errcheck // don't care about error here
-					return
-				}
-				if !ignoredVersions[entry.Version] {
-					changes = changes.Add(entry.GetName(), entry.GetInstallInfo(rolesPath).Version, entry.Version)
-				}
+			if entry.IsInstalled(rolesPath) {
+				return
+			}
+
+			oldVersion := entry.GetInstallInfo(rolesPath).Version
+			ok, err := installRole(rolesPath, entry, cleanup)
+			if ok {
+				bar.AddDetail(fmt.Sprintf("installed %s@%s", entry.GetName(), entry.Version)) //nolint:errcheck // don't care about error here
+			}
+			if err != nil {
+				errchan <- fmt.Errorf("installing %s@%s: %w", entry.GetName(), entry.Version, err)
+				bar.AddDetail(fmt.Sprintf("failed %s@%s", entry.GetName(), entry.Version)) //nolint:errcheck // don't care about error here
+				return
+			}
+			if !ignoredVersions[entry.Version] {
+				changes = changes.Add(entry.GetName(), oldVersion, entry.Version)
 			}
 		})
 	}
@@ -206,7 +209,7 @@ func installRole(rolesPath string, entry *models.Entry, cleanup bool) (bool, err
 
 	// check if the role is already installed
 	installedCommit := entry.GetInstallInfo(rolesPath).InstallCommit
-	if sha != "" && installedCommit != "" && sha == entry.GetInstallInfo(rolesPath).InstallCommit {
+	if sha != "" && installedCommit != "" && sha == installedCommit {
 		utils.Debug(name, "is already up to date")
 		return false, nil
 	}

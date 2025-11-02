@@ -85,12 +85,14 @@ func UpdateFile(entries models.File, requirementsPath string) error {
 				bar.AddDetail(fmt.Sprintf("failed %s@%s", entry.GetName(), entry.Version)) //nolint:errcheck // don't care about error here
 				return
 			}
-			if newVersion != "" {
-				changes = changes.Add(entry.GetName(), entry.Version, newVersion)
-				bar.AddDetail("updated " + entry.GetName() + " " + entry.Version + " -> " + newVersion) //nolint:errcheck // don't care about error here
-				entry.Version = newVersion
-				entries[i] = entry
+			if newVersion == "" {
+				return
 			}
+
+			changes = changes.Add(entry.GetName(), entry.Version, newVersion)
+			bar.AddDetail(fmt.Sprintf("updated %s@%s -> %s", entry.GetName(), entry.Version, newVersion)) //nolint:errcheck // that's ok
+			entry.Version = newVersion
+			entries[i] = entry
 		}(i, entry, &wg, errchan)
 	}
 	wg.Wait()
