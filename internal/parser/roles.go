@@ -72,7 +72,7 @@ func InstallMissingRoles(rolesPath string, entries models.File, limit int, clean
 				bar.AddDetail(fmt.Sprintf("failed %s@%s", entry.GetName(), entry.Version)) //nolint:errcheck // don't care about error here
 				return
 			}
-			if !ignoredVersions[entry.Version] {
+			if ok && !ignoredVersions[entry.Version] {
 				changes = changes.Add(entry.GetName(), oldVersion, entry.Version)
 			}
 		})
