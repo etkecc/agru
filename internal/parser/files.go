@@ -102,7 +102,7 @@ func UpdateFile(entries models.File, requirementsPath string) error {
 	}
 	close(errchan)
 	if len(errs) > 0 {
-		errStrs := []string{}
+		errStrs := make([]string, 0, len(errs))
 		for _, err := range errs {
 			errStrs = append(errStrs, err.Error())
 		}

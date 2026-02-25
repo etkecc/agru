@@ -1,4 +1,4 @@
-package parser
+package parser //nolint:revive // Package parser is responsible for parsing requirements.yml file and installing roles
 
 import (
 	"errors"
