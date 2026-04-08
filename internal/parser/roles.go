@@ -1,4 +1,4 @@
-package parser //nolint:revive // Package parser is responsible for parsing requirements.yml file and installing roles
+package parser
 
 import (
 	"errors"
@@ -225,6 +225,11 @@ func installRole(rolesPath string, entry *models.Entry, cleanup bool) (bool, err
 	out, err = utils.Run(archive.String(), tmpdir)
 	if err != nil {
 		return false, fmt.Errorf("archiving repo: %w\n%s", err, out)
+	}
+
+	// remove existing role directory to ensure stale files from previous versions are cleaned up
+	if err := os.RemoveAll(path.Join(rolesPath, name)); err != nil {
+		return false, fmt.Errorf("removing existing role dir: %w", err)
 	}
 
 	// extract the archive into roles path
