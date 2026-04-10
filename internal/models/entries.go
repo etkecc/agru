@@ -1,7 +1,7 @@
 package models
 
 import (
-	"os"
+	"io/fs"
 	"path"
 	"strings"
 	"time"
@@ -60,16 +60,17 @@ func (e *Entry) GetInstallInfoPath(rolesPath string) string {
 	return path.Join(e.GetPath(rolesPath), "meta", ".galaxy_install_info")
 }
 
-// GetInstallInfo parses .galaxy_install_info and returns parsed info
-func (e *Entry) GetInstallInfo(rolesPath string) GalaxyInstallInfo {
-	_, err := os.Stat(e.GetInstallInfoPath(rolesPath))
-	if err != nil && os.IsNotExist(err) {
-		return GalaxyInstallInfo{}
-	}
+// installInfoRelPath returns the relative path to .galaxy_install_info within the roles FS
+func (e *Entry) installInfoRelPath() string {
+	return path.Join(e.GetName(), "meta", ".galaxy_install_info")
+}
 
-	fileb, err := os.ReadFile(e.GetInstallInfoPath(rolesPath))
+// GetInstallInfo parses .galaxy_install_info and returns parsed info.
+// fsys should be rooted at the roles directory (e.g. os.DirFS(rolesPath)).
+func (e *Entry) GetInstallInfo(fsys fs.FS) GalaxyInstallInfo {
+	relPath := e.installInfoRelPath()
+	fileb, err := fs.ReadFile(fsys, relPath)
 	if err != nil {
-		utils.Log("ERROR:", err)
 		return GalaxyInstallInfo{}
 	}
 
@@ -91,14 +92,15 @@ func (e *Entry) GenerateInstallInfo(commitSHA string) ([]byte, error) {
 	return yaml.Marshal(info)
 }
 
-// IsInstalled checks if that entry with that specific version is installed
-func (e *Entry) IsInstalled(rolesPath string) bool {
-	_, err := os.Stat(e.GetPath(rolesPath))
-	if err != nil && os.IsNotExist(err) {
+// IsInstalled checks if that entry with that specific version is installed.
+// fsys should be rooted at the roles directory (e.g. os.DirFS(rolesPath)).
+func (e *Entry) IsInstalled(fsys fs.FS) bool {
+	_, err := fs.Stat(fsys, e.GetName())
+	if err != nil {
 		return false
 	}
 
-	if e.Version != e.GetInstallInfo(rolesPath).Version {
+	if e.Version != e.GetInstallInfo(fsys).Version {
 		return false
 	}
 

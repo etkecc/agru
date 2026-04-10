@@ -2,16 +2,15 @@ package utils
 
 import "fmt"
 
-// Verbose is a flag to enable verbose logging
-var Verbose bool
-
+// Log prints a message with the [a.g.r.u] prefix
 func Log(v ...any) {
 	v = append([]any{"[a.g.r.u]"}, v...)
 	fmt.Println(v...)
 }
 
-func Debug(v ...any) {
-	if Verbose {
+// Debug prints a message only when verbose is true
+func Debug(verbose bool, v ...any) {
+	if verbose {
 		Log(v...)
 	}
 }
