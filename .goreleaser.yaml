@@ -12,6 +12,7 @@ builds:
       - CGO_ENABLED=0
     ldflags:
       - -extldflags "-static"
+      - -X main.version={{.Version}}
     flags:
       - -tags=timetzdata,goolm
     main: ./cmd/agru
