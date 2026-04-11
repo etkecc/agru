@@ -10,7 +10,6 @@ import (
 
 	"github.com/etkecc/agru/internal/models"
 	"github.com/etkecc/agru/internal/runner"
-	"github.com/etkecc/agru/internal/utils"
 )
 
 var ignoredVersions = map[string]bool{
@@ -18,16 +17,23 @@ var ignoredVersions = map[string]bool{
 	"master": true,
 }
 
+// CheckProgress represents a version check result for a single role.
+type CheckProgress struct {
+	Name   string
+	OldVer string
+	NewVer string // empty = up to date; non-empty = newer version found
+	Err    error
+}
+
 // Parser handles parsing and updating of Ansible Galaxy requirements.yml files.
 // It uses a Runner to check for newer versions of roles via git ls-remote.
 type Parser struct {
-	runner  runner.Runner
-	verbose bool
+	runner runner.Runner
 }
 
-// New creates a new Parser with the given runner and verbose flag
-func New(r runner.Runner, verbose bool) *Parser {
-	return &Parser{runner: r, verbose: verbose}
+// New creates a new Parser with the given runner
+func New(r runner.Runner) *Parser {
+	return &Parser{runner: r}
 }
 
 // ParseFile parses requirements.yml file
@@ -73,13 +79,11 @@ func (p *Parser) parseAdditionalFile(req models.File) (models.File, error) {
 	return additional, nil
 }
 
-// UpdateFile updates the requirements.yml file with the latest versions
-func (p *Parser) UpdateFile(entries models.File, requirementsPath string) error {
-	changes, errs := p.checkVersions(entries)
+// UpdateFile updates the requirements.yml file with the latest versions.
+// Progress events are sent to the progress channel (if non-nil); the channel is closed when all checks complete.
+func (p *Parser) UpdateFile(entries models.File, requirementsPath string, progress chan<- CheckProgress) error {
+	_, errs := p.checkVersions(entries, progress)
 
-	if len(changes) > 0 {
-		utils.Log(changes.String("requirements changes:\n"))
-	}
 	if len(errs) > 0 {
 		errStrs := make([]string, 0, len(errs))
 		for _, err := range errs {
@@ -99,9 +103,36 @@ func (p *Parser) UpdateFile(entries models.File, requirementsPath string) error 
 	return nil
 }
 
+// checkEntry checks a single entry for a newer version and updates it in place.
+func (p *Parser) checkEntry(i int, entry *models.Entry, entries models.File, mu *sync.Mutex, changes *models.UpdatedItems, errs *[]error, progress chan<- CheckProgress) {
+	newVersion, err := p.getNewVersion(entry.Src, entry.Version)
+	mu.Lock()
+	defer mu.Unlock()
+	if err != nil {
+		*errs = append(*errs, fmt.Errorf("getting new version for %s@%s: %w", entry.GetName(), entry.Version, err))
+		if progress != nil {
+			progress <- CheckProgress{Name: entry.GetName(), OldVer: entry.Version, Err: err}
+		}
+		return
+	}
+	if newVersion != "" {
+		*changes = changes.Add(entry.GetName(), entry.Version, newVersion)
+		if progress != nil {
+			progress <- CheckProgress{Name: entry.GetName(), OldVer: entry.Version, NewVer: newVersion}
+		}
+		entry.Version = newVersion
+		entries[i] = entry
+		return
+	}
+	if progress != nil {
+		progress <- CheckProgress{Name: entry.GetName(), OldVer: entry.Version}
+	}
+}
+
 // checkVersions concurrently checks all entries for newer versions and updates them in place.
 // Returns the set of updated items and any errors encountered.
-func (p *Parser) checkVersions(entries models.File) (models.UpdatedItems, []error) {
+// Progress events are sent to the progress channel (if non-nil); the channel is closed when done.
+func (p *Parser) checkVersions(entries models.File, progress chan<- CheckProgress) (models.UpdatedItems, []error) {
 	var (
 		mu      sync.Mutex
 		wg      sync.WaitGroup
@@ -109,7 +140,6 @@ func (p *Parser) checkVersions(entries models.File) (models.UpdatedItems, []erro
 		errs    []error
 	)
 
-	bar := utils.NewProgressbar(entries.RolesLen(), "updating requirements file")
 	for i, entry := range entries {
 		if entry.Include != "" { // skip entries with include directive
 			continue
@@ -117,26 +147,13 @@ func (p *Parser) checkVersions(entries models.File) (models.UpdatedItems, []erro
 		wg.Add(1)
 		go func(i int, entry *models.Entry) {
 			defer wg.Done()
-			defer bar.Add(1) //nolint:errcheck // don't care about error here
-
-			newVersion, err := p.getNewVersion(entry.Src, entry.Version)
-			mu.Lock()
-			defer mu.Unlock()
-			if err != nil {
-				errs = append(errs, fmt.Errorf("getting new version for %s@%s: %w", entry.GetName(), entry.Version, err))
-				bar.AddDetail(fmt.Sprintf("failed %s@%s", entry.GetName(), entry.Version)) //nolint:errcheck // don't care about error here
-				return
-			}
-			if newVersion == "" {
-				return
-			}
-			changes = changes.Add(entry.GetName(), entry.Version, newVersion)
-			entry.Version = newVersion
-			entries[i] = entry
-			bar.AddDetail(fmt.Sprintf("updated %s@%s -> %s", entry.GetName(), entry.Version, newVersion)) //nolint:errcheck // that's ok
+			p.checkEntry(i, entry, entries, &mu, &changes, &errs, progress)
 		}(i, entry)
 	}
 	wg.Wait()
+	if progress != nil {
+		close(progress)
+	}
 	return changes, errs
 }
 

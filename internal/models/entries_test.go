@@ -111,7 +111,10 @@ func TestGetInstallInfo(t *testing.T) {
 
 	t.Run("reads install info from FS", func(t *testing.T) {
 		entry := Entry{Name: "my-role"}
-		info := entry.GetInstallInfo(fsys)
+		info, err := entry.GetInstallInfo(fsys)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		if info.Version != "v2.0.0" {
 			t.Errorf("Version = %q, want %q", info.Version, "v2.0.0")
 		}
@@ -122,7 +125,10 @@ func TestGetInstallInfo(t *testing.T) {
 
 	t.Run("returns zero value when file missing", func(t *testing.T) {
 		entry := Entry{Name: "nonexistent-role"}
-		info := entry.GetInstallInfo(fsys)
+		info, err := entry.GetInstallInfo(fsys)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		if info.Version != "" {
 			t.Errorf("Version = %q, want empty string for missing role", info.Version)
 		}

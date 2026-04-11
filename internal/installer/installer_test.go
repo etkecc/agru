@@ -189,7 +189,7 @@ func TestInstallRoleCallsGitInOrder(t *testing.T) {
 	entry.Src = "git+https://github.com/org/my-role.git"
 	entry.Version = "v1.0.0"
 
-	ok, err := inst.installRole(entry)
+	ok, _, err := inst.installRole(entry)
 	if err != nil {
 		t.Fatalf("installRole() error = %v", err)
 	}
@@ -237,7 +237,7 @@ func TestInstallRoleAlreadyUpToDate(t *testing.T) {
 	entry.Src = "git+https://github.com/org/my-role.git"
 	entry.Version = "v1.0.0"
 
-	ok, err := inst.installRole(entry)
+	ok, _, err := inst.installRole(entry)
 	if err != nil {
 		t.Fatalf("installRole() error = %v", err)
 	}
@@ -282,7 +282,7 @@ func TestInstallRoleCommitSHAVersion(t *testing.T) {
 	entry.Src = "git+https://github.com/org/sha-role.git"
 	entry.Version = commitSHA
 
-	_, err := inst.installRole(entry)
+	_, _, err := inst.installRole(entry)
 	if err != nil {
 		t.Fatalf("installRole() error = %v", err)
 	}
@@ -350,7 +350,7 @@ func TestInstallMissingConcurrentNoDatRace(t *testing.T) {
 		entries[idx].Version = "v1.0.0"
 	}
 
-	if err := inst.InstallMissing(entries); err != nil {
+	if err := inst.InstallMissing(entries, nil); err != nil {
 		t.Fatalf("InstallMissing() concurrent error = %v", err)
 	}
 }
@@ -370,7 +370,7 @@ func TestInstallMissingSkipsIncludeEntries(t *testing.T) {
 	}
 
 	// bootstrapRoles will try os.Stat on the rolesPath (temp dir exists, so no error)
-	err := inst.InstallMissing(entries)
+	err := inst.InstallMissing(entries, nil)
 	if err != nil {
 		t.Fatalf("InstallMissing() error = %v", err)
 	}

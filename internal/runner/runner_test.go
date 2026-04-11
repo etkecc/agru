@@ -5,7 +5,7 @@ import (
 )
 
 func TestShellRunnerRun(t *testing.T) {
-	r := New(false)
+	r := New()
 
 	t.Run("returns stdout output", func(t *testing.T) {
 		out, err := r.Run("echo hello", "")

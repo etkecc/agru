@@ -52,7 +52,7 @@ func TestParseFileDirectList(t *testing.T) {
   name: custom-name
 `
 	path := writeTemp(t, content)
-	p := New(newFakeRunner(), false)
+	p := New(newFakeRunner())
 
 	main, additional, err := p.ParseFile(path)
 	if err != nil {
@@ -81,7 +81,7 @@ func TestParseFileMapFormat(t *testing.T) {
     version: v2.0.0
 `
 	path := writeTemp(t, content)
-	p := New(newFakeRunner(), false)
+	p := New(newFakeRunner())
 
 	main, _, err := p.ParseFile(path)
 	if err != nil {
@@ -99,7 +99,7 @@ func TestParseFileDeduplicate(t *testing.T) {
   version: v2.0.0
 `
 	path := writeTemp(t, content)
-	p := New(newFakeRunner(), false)
+	p := New(newFakeRunner())
 
 	main, _, err := p.ParseFile(path)
 	if err != nil {
@@ -127,7 +127,7 @@ func TestParseFileWithInclude(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p := New(newFakeRunner(), false)
+	p := New(newFakeRunner())
 	main, additional, err := p.ParseFile(mainPath)
 	if err != nil {
 		t.Fatalf("ParseFile() error = %v", err)
@@ -145,7 +145,7 @@ func TestParseFileWithInclude(t *testing.T) {
 }
 
 func TestParseFileNotFound(t *testing.T) {
-	p := New(newFakeRunner(), false)
+	p := New(newFakeRunner())
 	_, _, err := p.ParseFile("/nonexistent/requirements.yml")
 	if err == nil {
 		t.Error("ParseFile() expected error for missing file, got nil")
@@ -153,7 +153,7 @@ func TestParseFileNotFound(t *testing.T) {
 }
 
 func TestGetNewVersionSkipsIgnored(t *testing.T) {
-	p := New(newFakeRunner(), false)
+	p := New(newFakeRunner())
 
 	for _, version := range []string{"main", "master"} {
 		newVer, err := p.getNewVersion("git+https://github.com/org/role.git", version)
@@ -167,7 +167,7 @@ func TestGetNewVersionSkipsIgnored(t *testing.T) {
 }
 
 func TestGetNewVersionSkipsNonGit(t *testing.T) {
-	p := New(newFakeRunner(), false)
+	p := New(newFakeRunner())
 	newVer, err := p.getNewVersion("https://example.com/role.tar.gz", "v1.0.0")
 	if err != nil {
 		t.Errorf("getNewVersion() error = %v", err)
@@ -183,7 +183,7 @@ func TestGetNewVersionReturnsNewTag(t *testing.T) {
 	cmd := "git ls-remote -tq --sort=-version:refname " + repo
 	fr.outputs[cmd] = "abc123\trefs/tags/v2.0.0\ndef456\trefs/tags/v1.0.0"
 
-	p := New(fr, false)
+	p := New(fr)
 	newVer, err := p.getNewVersion("git+"+repo, "v1.0.0")
 	if err != nil {
 		t.Fatalf("getNewVersion() error = %v", err)
@@ -199,7 +199,7 @@ func TestGetNewVersionSameVersion(t *testing.T) {
 	cmd := "git ls-remote -tq --sort=-version:refname " + repo
 	fr.outputs[cmd] = "abc123\trefs/tags/v1.0.0"
 
-	p := New(fr, false)
+	p := New(fr)
 	newVer, err := p.getNewVersion("git+"+repo, "v1.0.0")
 	if err != nil {
 		t.Fatalf("getNewVersion() error = %v", err)
@@ -216,7 +216,7 @@ func TestGetNewVersionHandlesCurlyBrace(t *testing.T) {
 	// Some GitHub repos append ^{} to tag refs
 	fr.outputs[cmd] = "abc123\trefs/tags/v2.0.0^{}\ndef456\trefs/tags/v1.0.0"
 
-	p := New(fr, false)
+	p := New(fr)
 	newVer, err := p.getNewVersion("git+"+repo, "v1.0.0")
 	if err != nil {
 		t.Fatalf("getNewVersion() error = %v", err)
@@ -239,9 +239,9 @@ func TestUpdateFile(t *testing.T) {
 	entries[0].Name = "role-a"
 
 	tmpPath := writeTemp(t, "")
-	p := New(fr, false)
+	p := New(fr)
 
-	if err := p.UpdateFile(entries, tmpPath); err != nil {
+	if err := p.UpdateFile(entries, tmpPath, nil); err != nil {
 		t.Fatalf("UpdateFile() error = %v", err)
 	}
 
@@ -270,7 +270,7 @@ func TestMergeFiles(t *testing.T) {
 		{Name: "role-c", Version: "v3.0.0"},
 	}
 
-	p := New(newFakeRunner(), false)
+	p := New(newFakeRunner())
 	result := p.MergeFiles(main, additional)
 
 	if len(result) != 3 {
@@ -299,7 +299,7 @@ func TestMergeFilesSorted(t *testing.T) {
 		{Name: "mango"},
 	}
 
-	p := New(newFakeRunner(), false)
+	p := New(newFakeRunner())
 	result := p.MergeFiles(main, additional)
 
 	if result[0].GetName() != "alpha" || result[1].GetName() != "mango" || result[2].GetName() != "zebra" {

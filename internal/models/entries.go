@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
-
-	"github.com/etkecc/agru/internal/utils"
 )
 
 var forcedVersions = map[string]bool{
@@ -67,19 +65,20 @@ func (e *Entry) installInfoRelPath() string {
 
 // GetInstallInfo parses .galaxy_install_info and returns parsed info.
 // fsys should be rooted at the roles directory (e.g. os.DirFS(rolesPath)).
-func (e *Entry) GetInstallInfo(fsys fs.FS) GalaxyInstallInfo {
+// A missing file returns a zero-value struct with a nil error.
+// A corrupt file returns a zero-value struct with a non-nil error.
+func (e *Entry) GetInstallInfo(fsys fs.FS) (GalaxyInstallInfo, error) {
 	relPath := e.installInfoRelPath()
 	fileb, err := fs.ReadFile(fsys, relPath)
 	if err != nil {
-		return GalaxyInstallInfo{}
+		return GalaxyInstallInfo{}, nil //nolint:nilerr // missing file is not an error
 	}
 
 	var info GalaxyInstallInfo
 	if err := yaml.Unmarshal(fileb, &info); err != nil {
-		utils.Log("ERROR:", err)
+		return GalaxyInstallInfo{}, err
 	}
-
-	return info
+	return info, nil
 }
 
 // GenerateInstallInfo generates fresh install info from current state of the entry struct
@@ -100,7 +99,8 @@ func (e *Entry) IsInstalled(fsys fs.FS) bool {
 		return false
 	}
 
-	if e.Version != e.GetInstallInfo(fsys).Version {
+	info, _ := e.GetInstallInfo(fsys) //nolint:errcheck // parse failure → empty version → treat as not installed
+	if e.Version != info.Version {
 		return false
 	}
 
