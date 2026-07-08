@@ -4,9 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"runtime/debug"
+	"sync"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/etkecc/go-kit"
 
 	"github.com/etkecc/agru/internal/installer"
 	"github.com/etkecc/agru/internal/parser"
@@ -15,8 +16,7 @@ import (
 	"github.com/etkecc/agru/internal/utils"
 )
 
-// version is set by goreleaser via -X main.version={{.Version}} at release build time.
-var version = ""
+var version = sync.OnceValue(func() string { return kit.Version("", "") })()
 
 type config struct {
 	rolesPath, requirementsPath, deleteInstalled                                           string
@@ -24,41 +24,10 @@ type config struct {
 	listInstalled, installMissing, updateRequirementsFile, cleanup, verbose, keep, version bool
 }
 
-func getVersion() string {
-	if version != "" {
-		return version
-	}
-	info, ok := debug.ReadBuildInfo()
-	if !ok {
-		return "dev"
-	}
-	if v := info.Main.Version; v != "" && v != "(devel)" {
-		return v
-	}
-	var rev, modified string
-	for _, s := range info.Settings {
-		switch s.Key {
-		case "vcs.revision":
-			rev = s.Value
-			if len(rev) > 7 {
-				rev = rev[:7]
-			}
-		case "vcs.modified":
-			if s.Value == "true" {
-				modified = "-dirty"
-			}
-		}
-	}
-	if rev != "" {
-		return rev + modified
-	}
-	return "dev"
-}
-
 func main() {
 	cfg := parseFlags()
 	if cfg.version {
-		fmt.Println(getVersion())
+		fmt.Println(version)
 		return
 	}
 	r := runner.New()
