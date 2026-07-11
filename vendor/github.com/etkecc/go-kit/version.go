@@ -1,8 +1,6 @@
 package kit
 
-import (
-	"runtime/debug"
-)
+import "runtime/debug"
 
 // Version answers "what version am I?" from the running binary's build info, whether the caller is
 // the app itself (the main module, or pass "") or a library down in the dep tree. First hit wins:

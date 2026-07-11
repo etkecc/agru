@@ -67,12 +67,14 @@ func (i *Installer) FS() fs.FS {
 // InstallMissing writes all roles to the target roles dir if role doesn't exist or has different version.
 // Progress events are sent to the progress channel (if non-nil); the channel is closed when all installs complete.
 func (i *Installer) InstallMissing(entries models.File, progress chan<- Progress) error {
+	if progress != nil {
+		defer close(progress) // close on every path. the bootstrap-fail return below skips the barrier, and a caller ranging this channel hangs forever otherwise
+	}
 	if err := i.bootstrapRoles(); err != nil {
 		return err
 	}
-	// Refresh FS after potentially creating the roles directory.
-	// Take a local snapshot before the concurrent loop — goroutines read from
-	// this snapshot; i.fsys is refreshed once after all installations complete.
+	// roles dir exists now, so refresh i.fsys, then hand the goroutines a local snapshot:
+	// they read fsys while i.fsys gets reassigned one more time after they all finish.
 	i.fsys = os.DirFS(i.rolesPath)
 	fsys := i.fsys
 
@@ -98,10 +100,6 @@ func (i *Installer) InstallMissing(entries models.File, progress chan<- Progress
 	}
 	wp.Run()
 	i.fsys = os.DirFS(i.rolesPath)
-
-	if progress != nil {
-		close(progress)
-	}
 
 	if len(errs) == 0 {
 		return nil

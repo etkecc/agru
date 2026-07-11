@@ -7,8 +7,11 @@ import (
 	"sync"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/term"
 	"github.com/etkecc/go-kit"
 
+	"github.com/etkecc/agru/internal/cli"
+	"github.com/etkecc/agru/internal/config"
 	"github.com/etkecc/agru/internal/installer"
 	"github.com/etkecc/agru/internal/parser"
 	"github.com/etkecc/agru/internal/runner"
@@ -18,56 +21,50 @@ import (
 
 var version = sync.OnceValue(func() string { return kit.Version("", "") })()
 
-type config struct {
-	rolesPath, requirementsPath, deleteInstalled                                           string
-	limit                                                                                  int
-	listInstalled, installMissing, updateRequirementsFile, cleanup, verbose, keep, version bool
-}
-
 func main() {
-	cfg := parseFlags()
-	if cfg.version {
+	cfg, showVersion := parseFlags()
+	if showVersion {
 		fmt.Println(version)
 		return
 	}
 	r := runner.New()
 	p := parser.New(r)
-	inst := installer.New(r, cfg.rolesPath, cfg.limit, cfg.cleanup)
+	inst := installer.New(r, cfg.RolesPath, cfg.Limit, cfg.Cleanup)
 
-	tuiCfg := tui.Config{
-		RequirementsPath: cfg.requirementsPath,
-		RolesPath:        cfg.rolesPath,
-		DeleteName:       cfg.deleteInstalled,
-		Limit:            cfg.limit,
-		ListInstalled:    cfg.listInstalled,
-		InstallMissing:   cfg.installMissing,
-		UpdateFile:       cfg.updateRequirementsFile,
-		Cleanup:          cfg.cleanup,
-		Verbose:          cfg.verbose,
-		Keep:             cfg.keep,
+	// No usable terminal (piped, redirected, CI) or an explicit opt-out: drop the TUI
+	// and log plain text instead, or bubbletea paints escape codes into the file.
+	if cfg.NoTUI || !term.IsTerminal(os.Stdout.Fd()) {
+		if err := cli.Run(cfg, p, inst); err != nil {
+			os.Exit(1)
+		}
+		return
 	}
 
-	prog := tea.NewProgram(tui.New(tuiCfg, p, inst))
+	prog := tea.NewProgram(tui.New(cfg, p, inst))
 	if _, err := prog.Run(); err != nil {
-		utils.Log("ERROR:", err)
+		utils.Error(err)
 		os.Exit(1)
 	}
 }
 
-func parseFlags() config {
-	var cfg config
-	flag.StringVar(&cfg.requirementsPath, "r", "requirements.yml", "ansible-galaxy requirements file")
-	flag.StringVar(&cfg.rolesPath, "p", "roles/galaxy/", "path to install roles")
-	flag.StringVar(&cfg.deleteInstalled, "d", "", "delete installed role, all other flags are ignored")
-	flag.IntVar(&cfg.limit, "limit", 0, "limit the number of parallel downloads (affects roles installation only). 0 - no limit (default)")
-	flag.BoolVar(&cfg.listInstalled, "l", false, "list installed roles")
-	flag.BoolVar(&cfg.installMissing, "i", true, "install missing roles")
-	flag.BoolVar(&cfg.updateRequirementsFile, "u", false, "update requirements file if newer versions are available")
-	flag.BoolVar(&cfg.cleanup, "c", true, "cleanup temporary files")
-	flag.BoolVar(&cfg.verbose, "verbose", false, "verbose output")
-	flag.BoolVar(&cfg.keep, "k", false, "keep TUI open after completion until 'q'")
-	flag.BoolVar(&cfg.version, "v", false, "print version and exit")
-	flag.BoolVar(&cfg.version, "version", false, "print version and exit")
+func parseFlags() (config.Config, bool) {
+	var (
+		cfg         config.Config
+		showVersion bool
+	)
+	flag.StringVar(&cfg.RequirementsPath, "r", "requirements.yml", "ansible-galaxy requirements file")
+	flag.StringVar(&cfg.RolesPath, "p", "roles/galaxy/", "path to install roles")
+	flag.StringVar(&cfg.DeleteName, "d", "", "delete installed role, all other flags are ignored")
+	flag.IntVar(&cfg.Limit, "limit", 0, "limit the number of parallel downloads (affects roles installation only). 0 - no limit (default)")
+	flag.BoolVar(&cfg.ListInstalled, "l", false, "list installed roles")
+	flag.BoolVar(&cfg.InstallMissing, "i", true, "install missing roles")
+	flag.BoolVar(&cfg.UpdateFile, "u", false, "update requirements file if newer versions are available")
+	flag.BoolVar(&cfg.Cleanup, "c", true, "cleanup temporary files")
+	flag.BoolVar(&cfg.Verbose, "verbose", false, "verbose output")
+	flag.BoolVar(&cfg.Keep, "k", false, "keep TUI open after completion until 'q'")
+	flag.BoolVar(&cfg.NoTUI, "no-tui", false, "force non-interactive logging output (no TUI)")
+	flag.BoolVar(&showVersion, "v", false, "print version and exit")
+	flag.BoolVar(&showVersion, "version", false, "print version and exit")
 	flag.Parse()
-	return cfg
+	return cfg, showVersion
 }

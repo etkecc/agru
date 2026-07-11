@@ -11,24 +11,11 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/etkecc/agru/internal/config"
 	"github.com/etkecc/agru/internal/installer"
 	"github.com/etkecc/agru/internal/models"
 	"github.com/etkecc/agru/internal/parser"
 )
-
-// Config holds the configuration for the TUI, derived from CLI flags.
-type Config struct {
-	RequirementsPath string
-	RolesPath        string
-	DeleteName       string
-	Limit            int
-	ListInstalled    bool
-	InstallMissing   bool
-	UpdateFile       bool
-	Cleanup          bool
-	Verbose          bool
-	Keep             bool // keep the TUI open after completion until 'q'
-}
 
 type appState int
 
@@ -102,7 +89,7 @@ func waitForInstall(ch <-chan installer.Progress) tea.Cmd {
 
 // Model is the Bubble Tea model for agru's TUI.
 type Model struct {
-	cfg     Config
+	cfg     config.Config
 	parser  *parser.Parser
 	inst    *installer.Installer
 	state   appState
@@ -142,7 +129,7 @@ type Model struct {
 }
 
 // New creates a new TUI model.
-func New(cfg Config, p *parser.Parser, inst *installer.Installer) *Model {
+func New(cfg config.Config, p *parser.Parser, inst *installer.Installer) *Model {
 	sp := spinner.New(spinner.WithSpinner(spinner.MiniDot))
 	sp.Style = styleCyan
 
@@ -377,7 +364,7 @@ func (m *Model) buildContent() string {
 	case stateInit:
 		body = m.spinner.View() + " Loading " + m.cfg.RequirementsPath + "…"
 	case stateList:
-		title := styleTitle.Render("agru") + styleDim.Render(" — installed roles")
+		title := styleTitle.Render("agru") + styleDim.Render(": installed roles")
 		body = title + "\n\n" + m.vp.View() + "\n\n" + styleDim.Render("q  quit")
 	case stateChecking, stateInstalling:
 		body = m.renderProgress(innerW)
@@ -475,7 +462,7 @@ func (m *Model) renderInstallSection(_, maxRows int) string {
 		}
 	}
 	if len(visible) == 0 {
-		sb.WriteString("  " + styleDim.Render("– all roles are up to date") + "\n")
+		sb.WriteString("  " + styleDim.Render("· all roles are up to date") + "\n")
 		return sb.String()
 	}
 	if maxRows > 0 && len(visible) > maxRows {
@@ -496,7 +483,7 @@ func (m *Model) renderCheckRow(row checkRow) string {
 		return "  " + styleGreen.Render("✓") + "  " + row.name + "  " +
 			styleDim.Render(row.oldVer) + styleYellow.Render(" → ") + styleGreen.Render(row.newVer)
 	}
-	return "  " + styleDim.Render("–") + "  " + styleDim.Render(row.name+"  "+row.oldVer+"  (up to date)")
+	return "  " + styleDim.Render("·") + "  " + styleDim.Render(row.name+"  "+row.oldVer+"  (up to date)")
 }
 
 // renderRoleItem renders a single install-progress row.

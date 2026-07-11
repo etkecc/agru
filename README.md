@@ -5,6 +5,7 @@
 * [What?](#what)
 * [Why?](#why)
 * [How?](#how)
+* [Non-interactive mode](#non-interactive-mode)
 * [What's the catch?](#whats-the-catch)
     * [only git repos are supported](#only-git-repos-are-supported)
     * [only roles are supported](#only-roles-are-supported)
@@ -18,26 +19,50 @@
 
 ## What?
 
-**a**nsible-**g**alaxy **r**equirements **u**pdater is fast ansible-galaxy replacement with the following features:
+**a**nsible-**g**alaxy **r**equirements **u**pdater. A drop-in `ansible-galaxy` replacement that's fast and doesn't argue with you:
 
-* update requirements.yml file if a newer git tag (role version) is available
-* update installed roles only when new version is present in requirements file
+* update requirements.yml when a newer git tag (role version) shows up
+* reinstall a role only when its version actually changed in requirements
 * install missing roles
-* full backwards-compatibility with `ansible-galaxy`, yes, even the odd trailing space in the galaxy-installed roles' meta/.galaxy_install_info is present
+* fully backwards-compatible with `ansible-galaxy`, down to the odd trailing space it leaves in the installed roles' `meta/.galaxy_install_info`
 
 ## Why?
 
-We at [etke.cc](https://etke.cc) developing and maintainining a lot of [Ansible roles](https://github.com/orgs/mother-of-all-self-hosting/repositories) and playbooks ([MDAD](https://github.com/spantaleev/matrix-docker-ansible-deploy), [MASH](https://github.com/mother-of-all-self-hosting/mash-playbook), [etke.cc](https://gitlab.com/etke.cc/ansible/)).
-And we developed A.G.R.U., because `ansible-galaxy` is slow, **very** slow. And irrational. And it misses some functions.
+We at [etke.cc](https://etke.cc) maintain a pile of [Ansible roles](https://github.com/orgs/mother-of-all-self-hosting/repositories) and playbooks ([MDAD](https://github.com/spantaleev/matrix-docker-ansible-deploy), [MASH](https://github.com/mother-of-all-self-hosting/mash-playbook), [etke.cc](https://gitlab.com/etke.cc/ansible/)). We wrote A.G.R.U. because `ansible-galaxy` is slow, **very** slow. And irrational. And it skips things you'd expect it to just do:
 
-* You updated some role's version in requirements file? Sorry, `ansible-galaxy install -r requirements.yml -p roles/galaxy/` can't install it, you have to use `--force` or remove the dir manually. A.G.R.U. does that automatically
-* You have 100500 roles in your requirements file and you have to manually check each of them if a newer tag is available? A.G.R.U. does that automatically
-* Roles installation takes ages with `ansible-galaxy`? A.G.R.U. needs a fraction of that time to install everything
+* Bumped a role's version in requirements? `ansible-galaxy install -r requirements.yml -p roles/galaxy/` won't install it. You get to add `--force` or delete the dir by hand. agru just does it.
+* Got 100500 roles and want to know which ones have a newer tag? Checking by hand is your evening gone. agru checks all of them at once.
+* Installs drag on forever? agru does the same work in a fraction of the time.
 
-While initially it was for maintainers needs, we made it useful for everyone.
-All our playbooks have a nice `just update` command (for maintainers: `just update -u`), which updates the playbook itself and installs all the roles. And it's fast.
+It started as a maintainer's tool, then turned out to be useful for everyone. Our playbooks ship a `just update` command (maintainers: `just update -u`) that updates the playbook and installs every role. And it's fast.
 
 ## How?
+
+Most of the time you just run it. Install everything missing from your requirements file:
+
+```bash
+$ agru
+```
+
+List what's installed:
+
+```bash
+$ agru -l
+```
+
+Update requirements to the newest available tags:
+
+```bash
+$ agru -u
+```
+
+Remove an installed role:
+
+```bash
+$ agru -d traefik
+```
+
+That covers the daily driving. The full set of flags:
 
 ```bash
 Usage of agru:
@@ -45,44 +70,39 @@ Usage of agru:
   -d string
     	delete installed role, all other flags are ignored
   -i	install missing roles (default true)
+  -k	keep TUI open after completion until 'q'
   -l	list installed roles
   -limit int
     	limit the number of parallel downloads (affects roles installation only). 0 - no limit (default)
+  -no-tui
+    	force non-interactive logging output (no TUI)
   -p string
     	path to install roles (default "roles/galaxy/")
   -r string
     	ansible-galaxy requirements file (default "requirements.yml")
   -u	update requirements file if newer versions are available
-  -v	verbose output
+  -v	print version and exit
+  -verbose
+    	verbose output
+  -version
+    	print version and exit
 ```
 
-**list installed roles**
+## Non-interactive mode
+
+agru draws a TUI when it has a terminal to draw on. Pipe it, redirect it, or run it in CI, and that TUI just garbles your log with escape codes. So when stdout isn't a terminal, agru skips the TUI and logs plain text instead: one line per role, errors on stderr, everything else on stdout.
+
+Want the plain output from a real terminal too? Force it:
 
 ```bash
-$ agru -l
+$ agru -no-tui
 ```
 
-**install role from the requirements file**
-
-```bash
-$ agru
-```
-
-**update requirements file if newer versions are available**
-
-```bash
-$ agru -u
-```
-
-**remove already installed role**
-
-```bash
-$ agru -d traefik
-```
+One difference from the TUI, and it's in your favor: the plain path checks whether things actually worked. If it can't write your updated `requirements.yml`, or can't create the roles directory, it says so on stderr and exits non-zero. The TUI swallows both and exits like nothing happened. If you're scripting agru, this is the mode you want.
 
 ## What's the catch?
 
-Do you think A.G.R.U. is too good to be true? Well, it's true, but it has limitations:
+Think A.G.R.U. is too good to be true? It's true, it just has limits:
 
 ### only git repos are supported
 
