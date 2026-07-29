@@ -37,6 +37,21 @@ archives:
       - goos: windows
         format: zip
 
+brews:
+  - name: agru
+    homepage: "https://github.com/etkecc/agru"
+    description: "Fast, drop-in ansible-galaxy replacement for updating role requirements"
+    license: "AGPL-3.0-only"
+    directory: Formula
+    repository:
+      owner: etkecc
+      name: agru
+      branch: main
+    install: |
+      bin.install "agru"
+    test: |
+      assert_match version.to_s, shell_output("#{bin}/agru -v")
+
 changelog:
   sort: asc
   filters:
