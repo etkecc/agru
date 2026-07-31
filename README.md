@@ -12,6 +12,7 @@
     * [only list/update/install/remove operations are supported](#only-listupdateinstallremove-operations-are-supported)
 * [Where to get?](#where-to-get)
     * [Binaries and distro-specific packages](#binaries-and-distro-specific-packages)
+    * [Homebrew](#homebrew)
     * [Build yourself](#build-yourself)
 * [Who uses it?](#who-uses-it)
 
@@ -133,6 +134,15 @@ Ansible Galaxy API is not used at all, thus no API-related actions are supported
 ### Binaries and distro-specific packages
 
 [Releases page](https://github.com/etkecc/agru/releases) and [Arch Linux AUR](https://aur.archlinux.org/packages/agru)
+
+### Homebrew
+
+agru isn't in homebrew-core (it's a small tool, well under the notability bar for that), so it ships as its own tap instead. Since the tap lives in this repo rather than in a separate `homebrew-agru` repo, the full tap URL is required:
+
+```bash
+$ brew tap etkecc/agru https://github.com/etkecc/agru
+$ brew install agru
+```
 
 ### Build yourself
 
