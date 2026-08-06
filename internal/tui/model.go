@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
+	"gopkg.in/yaml.v3"
 
 	"github.com/etkecc/agru/internal/config"
 	"github.com/etkecc/agru/internal/installer"
@@ -56,6 +57,7 @@ type listRow struct {
 type parsedMsg struct {
 	entries     models.File
 	installOnly models.File
+	extras      map[string]yaml.Node
 	err         error
 }
 
@@ -99,6 +101,7 @@ type Model struct {
 	// shared after parse
 	entries     models.File // updated in place by checkVersions
 	installOnly models.File
+	extras      map[string]yaml.Node // map-format top-level blocks agru doesn't model, round-tripped verbatim on -u
 
 	// check phase (-u)
 	checkRows  []checkRow
@@ -149,8 +152,8 @@ func (m *Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.spinner.Tick,
 		func() tea.Msg {
-			entries, installOnly, err := m.parser.ParseFile(m.cfg.RequirementsPath)
-			return parsedMsg{entries: entries, installOnly: installOnly, err: err}
+			entries, installOnly, extras, err := m.parser.ParseFile(m.cfg.RequirementsPath)
+			return parsedMsg{entries: entries, installOnly: installOnly, extras: extras, err: err}
 		},
 	)
 }
@@ -233,6 +236,7 @@ func (m *Model) handleParsed(msg parsedMsg) (tea.Model, tea.Cmd) {
 
 	m.entries = msg.entries
 	m.installOnly = msg.installOnly
+	m.extras = msg.extras
 	merged := m.parser.MergeFiles(msg.entries, msg.installOnly)
 
 	if m.cfg.ListInstalled {
@@ -250,7 +254,7 @@ func (m *Model) handleParsed(msg parsedMsg) (tea.Model, tea.Cmd) {
 		m.checkCh = ch
 		m.checkTotal = msg.entries.RolesLen()
 		m.state = stateChecking
-		go m.parser.UpdateFile(msg.entries, m.cfg.RequirementsPath, ch) //nolint:errcheck // errors delivered via channel
+		go m.parser.UpdateFile(msg.entries, msg.extras, m.cfg.RequirementsPath, ch) //nolint:errcheck // errors delivered via channel
 		return m, waitForCheck(ch)
 	}
 

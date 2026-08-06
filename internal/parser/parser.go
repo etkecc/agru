@@ -36,29 +36,30 @@ func New(r runner.Runner) *Parser {
 	return &Parser{runner: r}
 }
 
-// ParseFile parses requirements.yml file
-func (p *Parser) ParseFile(path string) (main, additional models.File, err error) {
+// ParseFile parses requirements.yml file. extras holds the map-format top-level blocks agru doesn't model (collections, etc.), captured here once so UpdateFile can round-trip them without re-reading disk.
+func (p *Parser) ParseFile(path string) (main, additional models.File, extras map[string]yaml.Node, err error) {
 	fileb, err := os.ReadFile(path)
 	if err != nil {
-		return models.File{}, models.File{}, fmt.Errorf("reading file %s: %w", path, err)
+		return models.File{}, models.File{}, nil, fmt.Errorf("reading file %s: %w", path, err)
 	}
 	var req models.File
 	if err := yaml.Unmarshal(fileb, &req); err != nil {
 		var reqMap models.FileMap
 		if err := yaml.Unmarshal(fileb, &reqMap); err != nil {
-			return models.File{}, models.File{}, fmt.Errorf("unmarshalling yaml %s: %w", path, err)
+			return models.File{}, models.File{}, nil, fmt.Errorf("unmarshalling yaml %s: %w", path, err)
 		}
 		req = reqMap.Slice()
+		extras = reqMap.Rest
 	}
 	req = req.Deduplicate()
 	req.Sort()
 
 	additional, err = p.parseAdditionalFile(req)
 	if err != nil {
-		return models.File{}, models.File{}, fmt.Errorf("parsing additional file: %w", err)
+		return models.File{}, models.File{}, nil, fmt.Errorf("parsing additional file: %w", err)
 	}
 
-	return req, additional, nil
+	return req, additional, extras, nil
 }
 
 // parseAdditionalFile parses additional requirements.yml files referenced via include
@@ -67,7 +68,7 @@ func (p *Parser) parseAdditionalFile(req models.File) (models.File, error) {
 	for _, entry := range req {
 		if entry.Include != "" {
 			// no recursive iteration over deeper levels, because it's not used anywhere
-			additionalLvl1, additionalLvl2, err := p.ParseFile(entry.Include)
+			additionalLvl1, additionalLvl2, _, err := p.ParseFile(entry.Include)
 			if err != nil {
 				return nil, err
 			}
@@ -81,7 +82,7 @@ func (p *Parser) parseAdditionalFile(req models.File) (models.File, error) {
 
 // UpdateFile updates the requirements.yml file with the latest versions.
 // Progress events are sent to the progress channel (if non-nil); the channel is closed when all checks complete.
-func (p *Parser) UpdateFile(entries models.File, requirementsPath string, progress chan<- CheckProgress) error {
+func (p *Parser) UpdateFile(entries models.File, extras map[string]yaml.Node, requirementsPath string, progress chan<- CheckProgress) error {
 	_, errs := p.checkVersions(entries, progress)
 
 	if len(errs) > 0 {
@@ -92,7 +93,15 @@ func (p *Parser) UpdateFile(entries models.File, requirementsPath string, progre
 		return fmt.Errorf("errors occurred during updating:\n%s", strings.Join(errStrs, "\n"))
 	}
 
-	outb, err := yaml.Marshal(entries)
+	var (
+		outb []byte
+		err  error
+	)
+	if len(extras) > 0 {
+		outb, err = yaml.Marshal(models.FileMap{Roles: entries, Rest: extras})
+	} else {
+		outb, err = yaml.Marshal(entries)
+	}
 	if err != nil {
 		return fmt.Errorf("marshaling yaml: %w", err)
 	}

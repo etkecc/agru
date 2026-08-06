@@ -54,7 +54,7 @@ func TestParseFileDirectList(t *testing.T) {
 	path := writeTemp(t, content)
 	p := New(newFakeRunner())
 
-	main, additional, err := p.ParseFile(path)
+	main, additional, _, err := p.ParseFile(path)
 	if err != nil {
 		t.Fatalf("ParseFile() error = %v", err)
 	}
@@ -83,7 +83,7 @@ func TestParseFileMapFormat(t *testing.T) {
 	path := writeTemp(t, content)
 	p := New(newFakeRunner())
 
-	main, _, err := p.ParseFile(path)
+	main, _, _, err := p.ParseFile(path)
 	if err != nil {
 		t.Fatalf("ParseFile() error = %v", err)
 	}
@@ -101,7 +101,7 @@ func TestParseFileDeduplicate(t *testing.T) {
 	path := writeTemp(t, content)
 	p := New(newFakeRunner())
 
-	main, _, err := p.ParseFile(path)
+	main, _, _, err := p.ParseFile(path)
 	if err != nil {
 		t.Fatalf("ParseFile() error = %v", err)
 	}
@@ -128,7 +128,7 @@ func TestParseFileWithInclude(t *testing.T) {
 	}
 
 	p := New(newFakeRunner())
-	main, additional, err := p.ParseFile(mainPath)
+	main, additional, _, err := p.ParseFile(mainPath)
 	if err != nil {
 		t.Fatalf("ParseFile() error = %v", err)
 	}
@@ -146,7 +146,7 @@ func TestParseFileWithInclude(t *testing.T) {
 
 func TestParseFileNotFound(t *testing.T) {
 	p := New(newFakeRunner())
-	_, _, err := p.ParseFile("/nonexistent/requirements.yml")
+	_, _, _, err := p.ParseFile("/nonexistent/requirements.yml")
 	if err == nil {
 		t.Error("ParseFile() expected error for missing file, got nil")
 	}
@@ -241,7 +241,7 @@ func TestUpdateFile(t *testing.T) {
 	tmpPath := writeTemp(t, "")
 	p := New(fr)
 
-	if err := p.UpdateFile(entries, tmpPath, nil); err != nil {
+	if err := p.UpdateFile(entries, nil, tmpPath, nil); err != nil {
 		t.Fatalf("UpdateFile() error = %v", err)
 	}
 
@@ -310,5 +310,87 @@ func TestMergeFilesSorted(t *testing.T) {
 			}
 			return names
 		}())
+	}
+}
+
+// -u must round-trip the collections block untouched instead of eating it on the way out.
+func TestUpdateFilePreservesCollections(t *testing.T) {
+	fr := newFakeRunner()
+	repo := "https://github.com/org/role-a.git"
+	fr.outputs["git ls-remote -tq --sort=-version:refname "+repo] = "abc\trefs/tags/v2.0.0"
+
+	content := `---
+
+collections:
+  - name: community.general
+    version: 8.0.0
+
+roles:
+  - src: git+` + repo + `
+    version: v1.0.0
+`
+	path := writeTemp(t, content)
+	p := New(fr)
+
+	entries, _, extras, err := p.ParseFile(path)
+	if err != nil {
+		t.Fatalf("ParseFile() error = %v", err)
+	}
+	if err := p.UpdateFile(entries, extras, path, nil); err != nil {
+		t.Fatalf("UpdateFile() error = %v", err)
+	}
+
+	out, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading updated file: %v", err)
+	}
+	got := string(out)
+	if !strings.Contains(got, "community.general") {
+		t.Errorf("UpdateFile() dropped the collections block:\n%s", got)
+	}
+	if !strings.Contains(got, "version: v2.0.0") {
+		t.Errorf("UpdateFile() did not bump the role version:\n%s", got)
+	}
+}
+
+// extras ride in from parse time, so a file unreadable during the write window keeps its collections instead of silently reverting to the bug.
+func TestUpdateFilePreservesCollectionsWhenUnreadableAtWrite(t *testing.T) {
+	fr := newFakeRunner()
+	repo := "https://github.com/org/role-a.git"
+	fr.outputs["git ls-remote -tq --sort=-version:refname "+repo] = "abc\trefs/tags/v2.0.0"
+
+	content := `---
+
+collections:
+  - name: community.general
+    version: 8.0.0
+
+roles:
+  - src: git+` + repo + `
+    version: v1.0.0
+`
+	path := writeTemp(t, content)
+	p := New(fr)
+
+	entries, _, extras, err := p.ParseFile(path)
+	if err != nil {
+		t.Fatalf("ParseFile() error = %v", err)
+	}
+	if err := os.Chmod(path, 0o200); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	if err := p.UpdateFile(entries, extras, path, nil); err != nil {
+		t.Fatalf("UpdateFile() error = %v", err)
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		t.Fatalf("chmod back: %v", err)
+	}
+
+	out, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading updated file: %v", err)
+	}
+	if !strings.Contains(string(out), "community.general") {
+		t.Errorf("UpdateFile() ate collections when the file was unreadable at write time:\n%s", out)
 	}
 }

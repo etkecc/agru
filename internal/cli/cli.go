@@ -8,6 +8,8 @@ import (
 	"os"
 	"path"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/etkecc/agru/internal/config"
 	"github.com/etkecc/agru/internal/installer"
 	"github.com/etkecc/agru/internal/models"
@@ -18,7 +20,7 @@ import (
 // Run executes the flag-selected action against the same services the TUI uses, and
 // returns non-zero-worthy errors so main can set the exit code. Mirrors handleParsed.
 func Run(cfg config.Config, p *parser.Parser, inst *installer.Installer) error {
-	entries, additional, err := p.ParseFile(cfg.RequirementsPath)
+	entries, additional, extras, err := p.ParseFile(cfg.RequirementsPath)
 	if err != nil {
 		utils.Error(err)
 		return err
@@ -34,7 +36,7 @@ func Run(cfg config.Config, p *parser.Parser, inst *installer.Installer) error {
 		// on -u -i we stop if the update failed. the TUI installs anyway and ships
 		// versions that never reached requirements.yml, which is how you get an
 		// unreproducible box; we refuse that here.
-		if err := runUpdate(cfg, p, entries); err != nil {
+		if err := runUpdate(cfg, p, entries, extras); err != nil {
 			return err
 		}
 		if !cfg.InstallMissing {
@@ -82,10 +84,10 @@ func runDelete(cfg config.Config, merged models.File) error {
 
 // runUpdate drains the version-check channel to stdout and returns the write error the
 // TUI drops: a failed requirements.yml write surfaces here as a non-zero exit.
-func runUpdate(cfg config.Config, p *parser.Parser, entries models.File) error {
+func runUpdate(cfg config.Config, p *parser.Parser, entries models.File, extras map[string]yaml.Node) error {
 	ch := make(chan parser.CheckProgress, 64)
 	errCh := make(chan error, 1)
-	go func() { errCh <- p.UpdateFile(entries, cfg.RequirementsPath, ch) }()
+	go func() { errCh <- p.UpdateFile(entries, extras, cfg.RequirementsPath, ch) }()
 	var streamed bool
 	for pr := range ch {
 		switch {
