@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"strings"
@@ -98,9 +99,9 @@ func (p *Parser) UpdateFile(entries models.File, extras map[string]yaml.Node, re
 		err  error
 	)
 	if len(extras) > 0 {
-		outb, err = yaml.Marshal(models.FileMap{Roles: entries, Rest: extras})
+		outb, err = p.marshal(models.FileMap{Roles: entries, Rest: extras})
 	} else {
-		outb, err = yaml.Marshal(entries)
+		outb, err = p.marshal(entries)
 	}
 	if err != nil {
 		return fmt.Errorf("marshaling yaml: %w", err)
@@ -110,6 +111,18 @@ func (p *Parser) UpdateFile(entries models.File, extras map[string]yaml.Node, re
 		return fmt.Errorf("writing file %s: %w", requirementsPath, err)
 	}
 	return nil
+}
+
+// marshal yaml with proper indentation
+func (p *Parser) marshal(v any) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	enc.Close()
+	return buf.Bytes(), nil
 }
 
 // checkEntry checks a single entry for a newer version and updates it in place.
