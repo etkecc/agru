@@ -52,7 +52,7 @@ func parseFlags() (config.Config, bool) {
 		cfg         config.Config
 		showVersion bool
 	)
-	flag.StringVar(&cfg.RequirementsPath, "r", "requirements.yml", "ansible-galaxy requirements file")
+	flag.StringVar(&cfg.RequirementsPath, "r", "requirements.yml", "ansible-galaxy requirements file, wildcards supported (e.g. molecule/**/requirements.yml)")
 	flag.StringVar(&cfg.RolesPath, "p", "roles/galaxy/", "path to install roles")
 	flag.StringVar(&cfg.DeleteName, "d", "", "delete installed role, all other flags are ignored")
 	flag.IntVar(&cfg.Limit, "limit", 0, "limit the number of parallel downloads (affects roles installation only). 0 - no limit (default)")

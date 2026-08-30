@@ -10,7 +10,6 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
-	"gopkg.in/yaml.v3"
 
 	"github.com/etkecc/agru/internal/config"
 	"github.com/etkecc/agru/internal/installer"
@@ -55,10 +54,8 @@ type listRow struct {
 // --- internal messages ---
 
 type parsedMsg struct {
-	entries     models.File
-	installOnly models.File
-	extras      map[string]yaml.Node
-	err         error
+	reqFiles []parser.RequirementsFile
+	err      error
 }
 
 type (
@@ -99,9 +96,7 @@ type Model struct {
 	vp      viewport.Model
 
 	// shared after parse
-	entries     models.File // updated in place by checkVersions
-	installOnly models.File
-	extras      map[string]yaml.Node // map-format top-level blocks agru doesn't model, round-tripped verbatim on -u
+	reqFiles []parser.RequirementsFile // Entries mutated in place by UpdateAll on -u
 
 	// check phase (-u)
 	checkRows  []checkRow
@@ -152,8 +147,8 @@ func (m *Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.spinner.Tick,
 		func() tea.Msg {
-			entries, installOnly, extras, err := m.parser.ParseFile(m.cfg.RequirementsPath)
-			return parsedMsg{entries: entries, installOnly: installOnly, extras: extras, err: err}
+			files, err := m.parser.ParsePattern(m.cfg.RequirementsPath)
+			return parsedMsg{reqFiles: files, err: err}
 		},
 	)
 }
@@ -208,7 +203,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.cfg.InstallMissing {
 			return m.quitOrKeep()
 		}
-		merged := m.parser.MergeFiles(m.entries, m.installOnly)
+		merged := m.parser.MergeAll(m.reqFiles)
 		return m.startInstall(merged)
 
 	case installer.Progress:
@@ -234,10 +229,8 @@ func (m *Model) handleParsed(msg parsedMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	m.entries = msg.entries
-	m.installOnly = msg.installOnly
-	m.extras = msg.extras
-	merged := m.parser.MergeFiles(msg.entries, msg.installOnly)
+	m.reqFiles = msg.reqFiles
+	merged := m.parser.MergeAll(msg.reqFiles)
 
 	if m.cfg.ListInstalled {
 		return m.handleListMode(merged)
@@ -252,9 +245,13 @@ func (m *Model) handleParsed(msg parsedMsg) (tea.Model, tea.Cmd) {
 	if m.cfg.UpdateFile {
 		ch := make(chan parser.CheckProgress, 64)
 		m.checkCh = ch
-		m.checkTotal = msg.entries.RolesLen()
+		var total int
+		for _, f := range msg.reqFiles {
+			total += f.Entries.RolesLen()
+		}
+		m.checkTotal = total
 		m.state = stateChecking
-		go m.parser.UpdateFile(msg.entries, msg.extras, m.cfg.RequirementsPath, ch) //nolint:errcheck // errors delivered via channel
+		go func() { _ = m.parser.UpdateAll(msg.reqFiles, ch) }() // write errors dropped like today; per-entry errors ride the channel
 		return m, waitForCheck(ch)
 	}
 

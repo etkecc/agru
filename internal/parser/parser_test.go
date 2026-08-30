@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/etkecc/agru/internal/models"
@@ -11,6 +12,7 @@ import (
 
 // fakeRunner records calls and returns preset outputs
 type fakeRunner struct {
+	mu      sync.Mutex
 	outputs map[string]string
 	errors  map[string]error
 	calls   []string
@@ -24,7 +26,9 @@ func newFakeRunner() *fakeRunner {
 }
 
 func (r *fakeRunner) Run(command, _ string) (string, error) {
+	r.mu.Lock()
 	r.calls = append(r.calls, command)
+	r.mu.Unlock()
 	if err, ok := r.errors[command]; ok {
 		return r.outputs[command], err
 	}

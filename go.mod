@@ -6,6 +6,7 @@ require (
 	charm.land/bubbles/v2 v2.1.1
 	charm.land/bubbletea/v2 v2.0.8
 	charm.land/lipgloss/v2 v2.0.5
+	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/charmbracelet/x/term v0.2.2
 	github.com/etkecc/go-kit v1.12.4
 	gopkg.in/yaml.v3 v3.0.1

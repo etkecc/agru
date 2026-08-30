@@ -7,8 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path"
-
-	"gopkg.in/yaml.v3"
+	"strings"
 
 	"github.com/etkecc/agru/internal/config"
 	"github.com/etkecc/agru/internal/installer"
@@ -20,12 +19,12 @@ import (
 // Run executes the flag-selected action against the same services the TUI uses, and
 // returns non-zero-worthy errors so main can set the exit code. Mirrors handleParsed.
 func Run(cfg config.Config, p *parser.Parser, inst *installer.Installer) error {
-	entries, additional, extras, err := p.ParseFile(cfg.RequirementsPath)
+	files, err := p.ParsePattern(cfg.RequirementsPath)
 	if err != nil {
 		utils.Error(err)
 		return err
 	}
-	merged := p.MergeFiles(entries, additional)
+	merged := p.MergeAll(files)
 
 	switch {
 	case cfg.ListInstalled:
@@ -36,14 +35,14 @@ func Run(cfg config.Config, p *parser.Parser, inst *installer.Installer) error {
 		// on -u -i we stop if the update failed. the TUI installs anyway and ships
 		// versions that never reached requirements.yml, which is how you get an
 		// unreproducible box; we refuse that here.
-		if err := runUpdate(cfg, p, entries, extras); err != nil {
+		if err := runUpdate(cfg, p, files); err != nil {
 			return err
 		}
 		if !cfg.InstallMissing {
 			return nil
 		}
-		// UpdateFile rewrote entries in place, so re-merge to hand the installer the bumped versions.
-		return runInstall(cfg, inst, p.MergeFiles(entries, additional))
+		// UpdateAll rewrote entries in place, so re-merge to hand the installer the bumped versions.
+		return runInstall(cfg, inst, p.MergeAll(files))
 	case cfg.InstallMissing:
 		return runInstall(cfg, inst, merged)
 	}
@@ -82,12 +81,11 @@ func runDelete(cfg config.Config, merged models.File) error {
 	return err
 }
 
-// runUpdate drains the version-check channel to stdout and returns the write error the
-// TUI drops: a failed requirements.yml write surfaces here as a non-zero exit.
-func runUpdate(cfg config.Config, p *parser.Parser, entries models.File, extras map[string]yaml.Node) error {
+// runUpdate drains the version-check channel to stdout and aggregates per-file errors into the returned error.
+func runUpdate(cfg config.Config, p *parser.Parser, files []parser.RequirementsFile) error {
 	ch := make(chan parser.CheckProgress, 64)
 	errCh := make(chan error, 1)
-	go func() { errCh <- p.UpdateFile(entries, extras, cfg.RequirementsPath, ch) }()
+	go func() { errCh <- updateErrors(files, p.UpdateAll(files, ch)) }()
 	var streamed bool
 	for pr := range ch {
 		switch {
@@ -101,10 +99,31 @@ func runUpdate(cfg config.Config, p *parser.Parser, entries models.File, extras 
 		}
 	}
 	err := <-errCh
-	if err != nil && !streamed {
-		utils.Error(err) // the requirements.yml write failure, which never rides the channel
+	// multi-file: a write failure must surface even when another file streamed check errors
+	if err != nil && (len(files) > 1 || !streamed) {
+		utils.Error(err)
 	}
 	return err
+}
+
+// updateErrors joins UpdateAll's per-file errors; a path prefix goes on only when several files matched.
+func updateErrors(files []parser.RequirementsFile, errs []error) error {
+	var agg []string
+	prefix := len(files) > 1 // single file: keep the original unprefixed error wording
+	for i, err := range errs {
+		if err == nil {
+			continue
+		}
+		if prefix {
+			agg = append(agg, files[i].Path+": "+err.Error())
+		} else {
+			agg = append(agg, err.Error())
+		}
+	}
+	if len(agg) > 0 {
+		return fmt.Errorf("%s", strings.Join(agg, "\n"))
+	}
+	return nil
 }
 
 // runInstall drains the install channel to stdout; per-role errors already print here,
