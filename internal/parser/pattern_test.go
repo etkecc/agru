@@ -114,6 +114,24 @@ func TestParsePatternSkipsDirectories(t *testing.T) {
 	}
 }
 
+func TestParsePatternMultiplePatterns(t *testing.T) {
+	dir := writeTree(t)
+	p := New(newFakeRunner())
+
+	pattern := filepath.Join(dir, "molecule", "mariadb", "requirements.yml") + ";" + filepath.Join(dir, "molecule", "redis", "requirements.yml")
+	files, err := p.ParsePattern(pattern)
+	if err != nil {
+		t.Fatalf("ParsePattern() error = %v", err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("ParsePattern() matched %d files, want 2", len(files))
+	}
+	paths := []string{files[0].Path, files[1].Path}
+	if !strings.HasSuffix(paths[0], "mariadb/requirements.yml") || !strings.HasSuffix(paths[1], "redis/requirements.yml") {
+		t.Errorf("ParsePattern() paths = %v, want mariadb and redis", paths)
+	}
+}
+
 func TestMergeAll(t *testing.T) {
 	p := New(newFakeRunner())
 	files := []RequirementsFile{

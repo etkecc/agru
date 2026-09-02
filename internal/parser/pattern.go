@@ -21,19 +21,29 @@ type RequirementsFile struct {
 	Extras     map[string]yaml.Node
 }
 
-// ParsePattern expands pattern (wildcards: * ? [ ] { } **) and parses every matched file in sorted path order.
+// ParsePattern expands pattern and parses matched files; multiple patterns can be separated by ';'.
 func (p *Parser) ParsePattern(pattern string) ([]RequirementsFile, error) {
-	paths, err := p.expandPattern(pattern)
-	if err != nil {
-		return nil, err
-	}
-	files := make([]RequirementsFile, 0, len(paths))
-	for _, path := range paths {
-		entries, additional, extras, err := p.ParseFile(path)
+	var files []RequirementsFile
+	patterns := strings.Split(pattern, ";")
+	for _, pat := range patterns {
+		pat = strings.TrimSpace(pat)
+		if pat == "" {
+			continue
+		}
+		paths, err := p.expandPattern(pat)
 		if err != nil {
 			return nil, err
 		}
-		files = append(files, RequirementsFile{Path: path, Entries: entries, Additional: additional, Extras: extras})
+		for _, path := range paths {
+			entries, additional, extras, err := p.ParseFile(path)
+			if err != nil {
+				return nil, err
+			}
+			files = append(files, RequirementsFile{Path: path, Entries: entries, Additional: additional, Extras: extras})
+		}
+	}
+	if len(files) == 0 {
+		return nil, fmt.Errorf("no requirements files match pattern %s", pattern)
 	}
 	return files, nil
 }
