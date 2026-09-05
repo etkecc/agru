@@ -40,7 +40,7 @@ func icon(status string) string {
 	case "pending":
 		return styleDim.Render("○")
 	case "skipped":
-		return styleDim.Render("–")
+		return styleDim.Render("-")
 	default:
 		return " "
 	}

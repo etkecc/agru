@@ -31,9 +31,7 @@ type Entry struct {
 	ActivationPrefix *string `yaml:"activation_prefix,omitempty"`
 }
 
-// GetName returns entry name with the following priority order
-// 1. name from the requirements.yml file (if set)
-// 2. name, generated from the entry's src
+// GetName returns the entry name from requirements.yml if set, else one generated from the entry's src.
 func (e *Entry) GetName() string {
 	if e.name != "" {
 		return e.name
@@ -63,10 +61,7 @@ func (e *Entry) installInfoRelPath() string {
 	return path.Join(e.GetName(), "meta", ".galaxy_install_info")
 }
 
-// GetInstallInfo parses .galaxy_install_info and returns parsed info.
-// fsys should be rooted at the roles directory (e.g. os.DirFS(rolesPath)).
-// A missing file returns a zero-value struct with a nil error.
-// A corrupt file returns a zero-value struct with a non-nil error.
+// GetInstallInfo parses .galaxy_install_info under fsys, treating a missing file as a zero-value success.
 func (e *Entry) GetInstallInfo(fsys fs.FS) (GalaxyInstallInfo, error) {
 	relPath := e.installInfoRelPath()
 	fileb, err := fs.ReadFile(fsys, relPath)
@@ -91,8 +86,7 @@ func (e *Entry) GenerateInstallInfo(commitSHA string) ([]byte, error) {
 	return yaml.Marshal(info)
 }
 
-// IsInstalled checks if that entry with that specific version is installed.
-// fsys should be rooted at the roles directory (e.g. os.DirFS(rolesPath)).
+// IsInstalled checks if that entry with that specific version is installed, fsys rooted at the roles directory.
 func (e *Entry) IsInstalled(fsys fs.FS) bool {
 	_, err := fs.Stat(fsys, e.GetName())
 	if err != nil {

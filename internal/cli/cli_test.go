@@ -57,8 +57,7 @@ func writeReqs(t *testing.T, dir string) string {
 	return fp
 }
 
-// each mode's Run must reach exactly the service the flag selects. we watch the git
-// commands the fake records, since that is the observable proof the branch fired.
+// each mode's Run must reach exactly the service the flag selects, proven via the git commands the fake records.
 
 func TestRunListTouchesNoGit(t *testing.T) {
 	dir := t.TempDir()
@@ -99,9 +98,7 @@ func TestRunUpdateChecksRemote(t *testing.T) {
 	}
 }
 
-// -u -i is fail-fast by design: a failed update must not fall through to install, or
-// we'd deploy bumped versions that never reached requirements.yml. this pins that,
-// against the TUI which installs anyway.
+// -u -i is fail-fast by design: a failed update must not fall through to install and deploy an unpinned version.
 func TestRunUpdateInstallFailFast(t *testing.T) {
 	dir := t.TempDir()
 	fr := newFakeRunner()

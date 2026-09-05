@@ -26,8 +26,7 @@ type CheckProgress struct {
 	Err    error
 }
 
-// Parser handles parsing and updating of Ansible Galaxy requirements.yml files.
-// It uses a Runner to check for newer versions of roles via git ls-remote.
+// Parser parses and updates Ansible Galaxy requirements.yml files, checking versions via a Runner's git ls-remote.
 type Parser struct {
 	runner runner.Runner
 }
@@ -37,7 +36,7 @@ func New(r runner.Runner) *Parser {
 	return &Parser{runner: r}
 }
 
-// ParseFile parses requirements.yml file. extras holds the map-format top-level blocks agru doesn't model (collections, etc.), captured here once so UpdateFile can round-trip them without re-reading disk.
+// ParseFile parses requirements.yml; extras holds unmodeled top-level blocks so UpdateFile can round-trip them.
 func (p *Parser) ParseFile(path string) (main, additional models.File, extras map[string]yaml.Node, err error) {
 	fileb, err := os.ReadFile(path)
 	if err != nil {
@@ -81,8 +80,7 @@ func (p *Parser) parseAdditionalFile(req models.File) (models.File, error) {
 	return additional, nil
 }
 
-// UpdateFile updates the requirements.yml file with the latest versions.
-// Progress events are sent to the progress channel (if non-nil); the channel is closed when all checks complete.
+// UpdateFile updates requirements.yml with the latest versions; closes the progress channel (if non-nil) when done.
 func (p *Parser) UpdateFile(entries models.File, extras map[string]yaml.Node, requirementsPath string, progress chan<- CheckProgress) error {
 	_, errs := p.checkVersions(entries, progress)
 
@@ -151,9 +149,7 @@ func (p *Parser) checkEntry(i int, entry *models.Entry, entries models.File, mu 
 	}
 }
 
-// checkVersions concurrently checks all entries for newer versions and updates them in place.
-// Returns the set of updated items and any errors encountered.
-// Progress events are sent to the progress channel (if non-nil); the channel is closed when done.
+// checkVersions concurrently checks and updates all entries in place, closing progress (if non-nil) when done.
 func (p *Parser) checkVersions(entries models.File, progress chan<- CheckProgress) (models.UpdatedItems, []error) {
 	var (
 		mu      sync.Mutex
@@ -179,8 +175,7 @@ func (p *Parser) checkVersions(entries models.File, progress chan<- CheckProgres
 	return changes, errs
 }
 
-// MergeFiles merges all requirements.yml files entries into one slice,
-// deduplicates them and prioritizes entries from the main requirements.yml file
+// MergeFiles merges all requirements.yml entries into one deduplicated slice, prioritizing the main file's entries.
 func (p *Parser) MergeFiles(mainReq models.File, additionalReqs ...models.File) models.File {
 	uniq := make(map[string]*models.Entry, 0)
 	for _, entry := range mainReq {

@@ -303,8 +303,7 @@ func TestInstallRoleCommitSHAVersion(t *testing.T) {
 }
 
 func TestInstallMissingConcurrentNoDatRace(t *testing.T) {
-	// Run with -race to detect data races. Uses 4 concurrent workers installing
-	// 8 roles in parallel, exercising shared state (i.fsys, changes).
+	// Run with -race: 4 concurrent workers install 8 roles in parallel, exercising shared state (i.fsys, changes).
 	tmpDir := t.TempDir()
 	rolesPath := filepath.Join(tmpDir, "roles")
 	if err := os.MkdirAll(rolesPath, 0o700); err != nil {
@@ -318,14 +317,12 @@ func TestInstallMissingConcurrentNoDatRace(t *testing.T) {
 				return commitSHA, nil
 			}
 			if strings.HasPrefix(command, "tar -xf ") {
-				// Extract role name from "tar -xf /tmp/agru-ROLENAME-*"
-				// The archive would contain ROLENAME/ but we simulate by creating the meta dir.
-				// We determine the role from the archive path suffix pattern: agru-ROLENAME-*.tar
+				// extract the role name from the archive path pattern "agru-ROLENAME-*.tar" and simulate its meta dir
 				parts := strings.Split(command, " ")
 				if len(parts) >= 3 {
 					archivePath := parts[2]
 					base := strings.TrimSuffix(archivePath[strings.LastIndex(archivePath, "agru-")+5:], ".tar")
-					// base is "ROLENAME-RANDOMSUFFIX" — strip the random suffix
+					// base is "ROLENAME-RANDOMSUFFIX", strip the random suffix
 					if idx := strings.LastIndex(base, "-"); idx != -1 {
 						roleName := base[:idx]
 						metaDir := filepath.Join(rolesPath, roleName, "meta")

@@ -38,8 +38,7 @@ type Progress struct {
 	Err        error
 }
 
-// Installer handles installing and managing Ansible roles from a requirements.yml file.
-// It uses a Runner to execute git commands and an fs.FS for reading role metadata.
+// Installer installs and manages Ansible roles from a requirements.yml file via a Runner and an fs.FS.
 type Installer struct {
 	runner    runner.Runner
 	fsys      fs.FS
@@ -64,8 +63,7 @@ func (i *Installer) FS() fs.FS {
 	return i.fsys
 }
 
-// InstallMissing writes all roles to the target roles dir if role doesn't exist or has different version.
-// Progress events are sent to the progress channel (if non-nil); the channel is closed when all installs complete.
+// InstallMissing writes roles missing or outdated; closes progress (if non-nil) when done.
 func (i *Installer) InstallMissing(entries models.File, progress chan<- Progress) error {
 	if progress != nil {
 		defer close(progress) // close on every path. the bootstrap-fail return below skips the barrier, and a caller ranging this channel hangs forever otherwise
@@ -73,8 +71,7 @@ func (i *Installer) InstallMissing(entries models.File, progress chan<- Progress
 	if err := i.bootstrapRoles(); err != nil {
 		return err
 	}
-	// roles dir exists now, so refresh i.fsys, then hand the goroutines a local snapshot:
-	// they read fsys while i.fsys gets reassigned one more time after they all finish.
+	// roles dir exists now: refresh i.fsys, then snapshot it locally, since goroutines outlive the next reassignment.
 	i.fsys = os.DirFS(i.rolesPath)
 	fsys := i.fsys
 
@@ -139,8 +136,7 @@ func (i *Installer) installEntry(entry *models.Entry, fsys fs.FS, mu *sync.Mutex
 	}
 }
 
-// processEntry checks and installs a single role.
-// Returns the previously installed version, whether the role was installed/updated, a verbose log line, and any error.
+// processEntry checks and installs a single role, returning its prior version, whether it changed, and a log line.
 func (i *Installer) processEntry(entry *models.Entry, fsys fs.FS) (oldVersion string, installed bool, logLine string, err error) {
 	if entry.IsInstalled(fsys) {
 		return "", false, "", nil
@@ -166,8 +162,7 @@ func (i *Installer) GetInstalled(entries models.File) models.File {
 	return installed
 }
 
-// installRole writes specific role version to the target roles dir.
-// Returns whether the role was installed, a verbose log line, and any error.
+// installRole writes the specific role version to the target roles dir, returning whether it installed and a log line.
 func (i *Installer) installRole(entry *models.Entry) (installed bool, log string, err error) {
 	name := entry.GetName()
 
@@ -261,7 +256,7 @@ func (i *Installer) runClone(cmd string, attempt int) (string, error) {
 		return out, nil
 	}
 
-	// fatal: unable to access 'https://github.com/user/repo.git/': Failed to connect to github.com port 443 after 135428 ms: Couldn't connect to server
+	// git clone failure text on a network blip, e.g. "Failed to connect to github.com... Couldn't connect to server"
 	if strings.Contains(out, "Couldn't connect to server") && attempt < RetriesMax {
 		delay := RetryStepDelay * time.Duration(attempt)
 		time.Sleep(delay)

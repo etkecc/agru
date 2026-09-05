@@ -563,8 +563,7 @@ func (m *Model) innerWidth() int {
 	return w
 }
 
-// innerHeight returns available content lines inside the border,
-// minus the verbose log panel height when it is active.
+// innerHeight returns available content lines inside the border, minus the verbose log panel when active.
 func (m *Model) innerHeight() int {
 	h := m.height - 2 // top + bottom border
 	if m.cfg.Verbose && len(m.logLines) > 0 && m.state != stateList {

@@ -1,5 +1,4 @@
-// Package config holds agru's runtime configuration, derived from CLI flags and
-// shared by every consumer (the TUI, the non-interactive CLI, main's dispatch).
+// Package config holds agru's runtime configuration, shared by the TUI, the CLI, and main's dispatch.
 package config
 
 // Config holds the configuration for a single agru run, derived from CLI flags.

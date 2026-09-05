@@ -32,8 +32,7 @@ func main() {
 	p := parser.New(r)
 	inst := installer.New(r, cfg.RolesPath, cfg.Limit, cfg.Cleanup)
 
-	// No usable terminal (piped, redirected, CI) or an explicit opt-out: drop the TUI
-	// and log plain text instead, or bubbletea paints escape codes into the file.
+	// No usable terminal (piped, redirected, CI) or an explicit opt-out: log plain text; bubbletea paints escapes.
 	if cfg.NoTUI || !term.IsTerminal(os.Stdout.Fd()) {
 		if err := cli.Run(cfg, p, inst); err != nil {
 			os.Exit(1)

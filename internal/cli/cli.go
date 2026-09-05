@@ -1,6 +1,4 @@
-// Package cli drives agru without the TUI: it consumes the same parser/installer
-// progress channels synchronously and emits plain, colorless line logs, for when
-// stdout is a file or a CI log instead of a terminal.
+// Package cli drives agru without the TUI, emitting plain colorless line logs for a file or CI log.
 package cli
 
 import (
@@ -16,8 +14,7 @@ import (
 	"github.com/etkecc/agru/internal/utils"
 )
 
-// Run executes the flag-selected action against the same services the TUI uses, and
-// returns non-zero-worthy errors so main can set the exit code. Mirrors handleParsed.
+// Run executes the flag-selected action against the same services the TUI uses. Mirrors handleParsed.
 func Run(cfg config.Config, p *parser.Parser, inst *installer.Installer) error {
 	files, err := p.ParsePattern(cfg.RequirementsPath)
 	if err != nil {
@@ -32,9 +29,7 @@ func Run(cfg config.Config, p *parser.Parser, inst *installer.Installer) error {
 	case cfg.DeleteName != "":
 		return runDelete(cfg, merged)
 	case cfg.UpdateFile:
-		// on -u -i we stop if the update failed. the TUI installs anyway and ships
-		// versions that never reached requirements.yml, which is how you get an
-		// unreproducible box; we refuse that here.
+		// on -u -i we stop if the update failed, unlike the TUI, which installs unreproducible versions anyway.
 		if err := runUpdate(cfg, p, files); err != nil {
 			return err
 		}
@@ -49,8 +44,7 @@ func Run(cfg config.Config, p *parser.Parser, inst *installer.Installer) error {
 	return nil
 }
 
-// runList prints one "name version" line per installed role; a role whose install
-// info won't parse goes to stderr and the rest keep listing.
+// runList prints one "name version" line per installed role; a role whose install info won't parse goes to stderr.
 func runList(inst *installer.Installer, merged models.File) error {
 	installed := inst.GetInstalled(merged)
 	for _, e := range installed {
@@ -126,8 +120,7 @@ func updateErrors(files []parser.RequirementsFile, errs []error) error {
 	return nil
 }
 
-// runInstall drains the install channel to stdout; per-role errors already print here,
-// so the returned aggregate only drives the exit code.
+// runInstall drains the install channel to stdout; the returned aggregate only drives the exit code.
 func runInstall(cfg config.Config, inst *installer.Installer, merged models.File) error {
 	ch := make(chan installer.Progress, 64)
 	errCh := make(chan error, 1)

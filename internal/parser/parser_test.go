@@ -357,7 +357,7 @@ roles:
 	}
 }
 
-// extras ride in from parse time, so a file unreadable during the write window keeps its collections instead of silently reverting to the bug.
+// extras ride in from parse time, so an unreadable file at write time still keeps its collections.
 func TestUpdateFilePreservesCollectionsWhenUnreadableAtWrite(t *testing.T) {
 	fr := newFakeRunner()
 	repo := "https://github.com/org/role-a.git"

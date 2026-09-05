@@ -5,14 +5,12 @@ import (
 	"strings"
 )
 
-// Runner is an interface for executing shell commands.
-// Implementations are expected to return combined stdout+stderr output.
+// Runner executes shell commands, returning combined stdout+stderr output.
 type Runner interface {
 	Run(command, dir string) (string, error)
 }
 
-// ShellRunner executes shell commands via os/exec.
-// It implements the Runner interface using the system shell.
+// ShellRunner implements Runner via os/exec against the system shell.
 type ShellRunner struct{}
 
 // New creates a new ShellRunner
