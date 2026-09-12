@@ -107,14 +107,19 @@ func parseFlags() (config.Config, bool) {
 		utils.Error(err)
 		os.Exit(2)
 	}
-
 	paths := []string{}
 	if len(reqPaths) > 0 {
-		paths = append(paths, reqPaths...)
+		for _, p := range reqPaths {
+			if _, err := os.Stat(p); err == nil {
+				paths = append(paths, p)
+			}
+		}
 	}
 	for _, a := range fs.Args() {
 		if !strings.HasPrefix(a, "-") {
-			paths = append(paths, a)
+			if _, err := os.Stat(a); err == nil {
+				paths = append(paths, a)
+			}
 		}
 	}
 	if len(paths) == 0 {

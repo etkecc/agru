@@ -24,21 +24,43 @@ func TestParseFlagsDefaults(t *testing.T) {
 func TestParseFlagsRepeatedR(t *testing.T) {
 	orig := os.Args
 	defer func() { os.Args = orig }()
-	os.Args = []string{"agru", "-r", "a.yml", "-r", "b.yml", "-u"}
+
+	tmp := t.TempDir()
+	a := tmp + "/a.yml"
+	b := tmp + "/b.yml"
+	if err := os.WriteFile(a, []byte("a"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(b, []byte("b"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	os.Args = []string{"agru", "-r", a, "-r", b, "-u"}
 	cfg, _ := parseFlags()
 	if cfg.UpdateFile != true {
 		t.Errorf("UpdateFile should be true")
 	}
-	if cfg.RequirementsPath != "a.yml;b.yml" {
-		t.Errorf("RequirementsPath = %q, want a.yml;b.yml", cfg.RequirementsPath)
+	if cfg.RequirementsPath != a+";"+b {
+		t.Errorf("RequirementsPath = %q, want %q", cfg.RequirementsPath, a+";"+b)
 	}
 }
 
 func TestParseFlagsShellExpansion(t *testing.T) {
 	orig := os.Args
 	defer func() { os.Args = orig }()
+
+	tmp := t.TempDir()
+	f1 := tmp + "/file1.yml"
+	f2 := tmp + "/file2.yml"
+	if err := os.WriteFile(f1, []byte("f1"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(f2, []byte("f2"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
 	// Simulate shell expansion: -r file1 file2 -u
-	os.Args = []string{"agru", "-r", "file1.yml", "file2.yml", "-u", "-no-tui"}
+	os.Args = []string{"agru", "-r", f1, f2, "-u", "-no-tui"}
 	cfg, _ := parseFlags()
 	if !cfg.UpdateFile {
 		t.Errorf("UpdateFile should be true")
@@ -46,8 +68,25 @@ func TestParseFlagsShellExpansion(t *testing.T) {
 	if !cfg.NoTUI {
 		t.Errorf("NoTUI should be true")
 	}
-	if cfg.RequirementsPath != "file1.yml;file2.yml" {
-		t.Errorf("RequirementsPath = %q, want file1.yml;file2.yml", cfg.RequirementsPath)
+	if cfg.RequirementsPath != f1+";"+f2 {
+		t.Errorf("RequirementsPath = %q, want %q", cfg.RequirementsPath, f1+";"+f2)
+	}
+}
+
+func TestParseFlagsIgnoresNonExistentFiles(t *testing.T) {
+	orig := os.Args
+	defer func() { os.Args = orig }()
+
+	tmp := t.TempDir()
+	exists := tmp + "/exists.yml"
+	if err := os.WriteFile(exists, []byte("exists"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	os.Args = []string{"agru", "-r", exists, "-r", "does-not-exist.yml"}
+	cfg, _ := parseFlags()
+	if cfg.RequirementsPath != exists {
+		t.Errorf("RequirementsPath = %q, want only existing file %q", cfg.RequirementsPath, exists)
 	}
 }
 
