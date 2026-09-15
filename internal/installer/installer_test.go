@@ -36,6 +36,10 @@ func (r *fakeRunner) Run(command, _ string) (string, error) {
 	return "", nil
 }
 
+func (r *fakeRunner) RunArgs(args []string, dir string) (string, error) {
+	return r.Run(strings.Join(args, " "), dir)
+}
+
 func (r *fakeRunner) called(prefix string) bool {
 	for _, c := range r.calls {
 		if strings.HasPrefix(c, prefix) {
@@ -52,6 +56,10 @@ type callbackRunner struct {
 
 func (r *callbackRunner) Run(command, dir string) (string, error) {
 	return r.fn(command, dir)
+}
+
+func (r *callbackRunner) RunArgs(args []string, dir string) (string, error) {
+	return r.Run(strings.Join(args, " "), dir)
 }
 
 func TestGetInstalled(t *testing.T) {
@@ -347,7 +355,7 @@ func TestInstallMissingConcurrentNoDatRace(t *testing.T) {
 		entries[idx].Version = "v1.0.0"
 	}
 
-	if err := inst.InstallMissing(entries, nil); err != nil {
+	if err := inst.InstallMissing(entries, nil, nil); err != nil {
 		t.Fatalf("InstallMissing() concurrent error = %v", err)
 	}
 }
@@ -367,7 +375,7 @@ func TestInstallMissingSkipsIncludeEntries(t *testing.T) {
 	}
 
 	// bootstrapRoles will try os.Stat on the rolesPath (temp dir exists, so no error)
-	err := inst.InstallMissing(entries, nil)
+	err := inst.InstallMissing(entries, nil, nil)
 	if err != nil {
 		t.Fatalf("InstallMissing() error = %v", err)
 	}

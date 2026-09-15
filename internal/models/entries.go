@@ -29,7 +29,14 @@ type Entry struct {
 	Name             string  `yaml:"name,omitempty"`
 	Include          string  `yaml:"include,omitempty"`
 	ActivationPrefix *string `yaml:"activation_prefix,omitempty"`
+	unsupported      string  `yaml:"-"` // reason, empty = supported
 }
+
+// Unsupported returns the reason this entry is unsupported, empty when supported.
+func (e *Entry) Unsupported() string { return e.unsupported }
+
+// SetUnsupported marks this entry as unsupported with the given reason.
+func (e *Entry) SetUnsupported(reason string) { e.unsupported = reason }
 
 // GetName returns the entry name from requirements.yml if set, else one generated from the entry's src.
 func (e *Entry) GetName() string {

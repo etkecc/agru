@@ -9,6 +9,7 @@ require (
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/charmbracelet/x/term v0.2.2
 	github.com/etkecc/go-kit v1.12.4
+	github.com/goccy/go-json v0.10.6
 	gopkg.in/yaml.v3 v3.0.1
 )
 

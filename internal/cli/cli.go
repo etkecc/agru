@@ -15,19 +15,20 @@ import (
 )
 
 // Run executes the flag-selected action against the same services the TUI uses. Mirrors handleParsed.
-func Run(cfg config.Config, p *parser.Parser, inst *installer.Installer) error {
+func Run(cfg *config.Config, p *parser.Parser, inst *installer.Installer) error {
 	files, err := p.ParsePattern(cfg.RequirementsPath)
 	if err != nil {
 		utils.Error(err)
 		return err
 	}
 	merged := p.MergeAll(files)
+	mergedColls := p.MergeAllCollections(files)
 
 	switch {
 	case cfg.ListInstalled:
-		return runList(inst, merged)
+		return runList(inst, merged, mergedColls)
 	case cfg.DeleteName != "":
-		return runDelete(cfg, merged)
+		return runDelete(cfg, merged, mergedColls)
 	case cfg.UpdateFile:
 		// on -u -i we stop if the update failed, unlike the TUI, which installs unreproducible versions anyway.
 		if err := runUpdate(cfg, p, files); err != nil {
@@ -37,15 +38,15 @@ func Run(cfg config.Config, p *parser.Parser, inst *installer.Installer) error {
 			return nil
 		}
 		// UpdateAll rewrote entries in place, so re-merge to hand the installer the bumped versions.
-		return runInstall(cfg, inst, p.MergeAll(files))
+		return runInstall(cfg, inst, p.MergeAll(files), p.MergeAllCollections(files))
 	case cfg.InstallMissing:
-		return runInstall(cfg, inst, merged)
+		return runInstall(cfg, inst, merged, mergedColls)
 	}
 	return nil
 }
 
-// runList prints one "name version" line per installed role; a role whose install info won't parse goes to stderr.
-func runList(inst *installer.Installer, merged models.File) error {
+// runList prints one "name version" line per installed role and collection.
+func runList(inst *installer.Installer, merged models.File, mergedColls models.Collections) error {
 	installed := inst.GetInstalled(merged)
 	for _, e := range installed {
 		info, err := e.GetInstallInfo(inst.FS())
@@ -55,16 +56,37 @@ func runList(inst *installer.Installer, merged models.File) error {
 		}
 		utils.Log(e.GetName(), info.Version)
 	}
+	// List installed collections
+	installedColls := inst.GetInstalledCollections(mergedColls)
+	for _, c := range installedColls {
+		utils.Log(c.GetFQCN(), c.GetInstalledVersion(inst.CollFS()))
+	}
 	return nil
 }
 
-// runDelete removes one role's directory. success is silent, matching the TUI's silent quit.
-func runDelete(cfg config.Config, merged models.File) error {
+// runDelete removes one role or collection directory by name.
+func runDelete(cfg *config.Config, merged models.File, mergedColls models.Collections) error {
+	// Roles first (win on collision)
 	for _, entry := range merged {
 		if entry.GetName() != cfg.DeleteName {
 			continue
 		}
 		if err := os.RemoveAll(path.Join(cfg.RolesPath, entry.GetName())); err != nil {
+			utils.Error(err)
+			return err
+		}
+		return nil
+	}
+	// Then collections
+	for _, c := range mergedColls {
+		if c.GetFQCN() != cfg.DeleteName {
+			continue
+		}
+		target := c.GetPath(cfg.CollectionsPath)
+		if target == "" {
+			continue
+		}
+		if err := os.RemoveAll(target); err != nil {
 			utils.Error(err)
 			return err
 		}
@@ -76,13 +98,15 @@ func runDelete(cfg config.Config, merged models.File) error {
 }
 
 // runUpdate drains the version-check channel to stdout and aggregates per-file errors into the returned error.
-func runUpdate(cfg config.Config, p *parser.Parser, files []parser.RequirementsFile) error {
+func runUpdate(cfg *config.Config, p *parser.Parser, files []parser.RequirementsFile) error {
 	ch := make(chan parser.CheckProgress, 64)
 	errCh := make(chan error, 1)
 	go func() { errCh <- updateErrors(files, p.UpdateAll(files, ch)) }()
 	var streamed bool
 	for pr := range ch {
 		switch {
+		case pr.Notice != "":
+			utils.Error(pr.Name, pr.Notice+", skipping")
 		case pr.Err != nil:
 			streamed = true
 			utils.Error(pr.Name, pr.Err)
@@ -121,10 +145,10 @@ func updateErrors(files []parser.RequirementsFile, errs []error) error {
 }
 
 // runInstall drains the install channel to stdout; the returned aggregate only drives the exit code.
-func runInstall(cfg config.Config, inst *installer.Installer, merged models.File) error {
+func runInstall(cfg *config.Config, inst *installer.Installer, merged models.File, mergedColls models.Collections) error {
 	ch := make(chan installer.Progress, 64)
 	errCh := make(chan error, 1)
-	go func() { errCh <- inst.InstallMissing(merged, ch) }()
+	go func() { errCh <- inst.InstallMissing(merged, mergedColls, ch) }()
 	var streamed bool
 	for pr := range ch {
 		switch pr.Status {
@@ -132,6 +156,8 @@ func runInstall(cfg config.Config, inst *installer.Installer, merged models.File
 			utils.Debug(cfg.Verbose, "installing", pr.Name, pr.Version)
 		case "skipped":
 			utils.Debug(cfg.Verbose, pr.Name, "(up to date)")
+		case "unsupported":
+			utils.Error(pr.Name, pr.Log+", skipping")
 		case "done":
 			line := pr.Version
 			if pr.OldVersion != "" && pr.OldVersion != pr.Version {

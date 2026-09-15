@@ -5,6 +5,7 @@ package config
 type Config struct {
 	RequirementsPath string
 	RolesPath        string
+	CollectionsPath  string
 	DeleteName       string
 	Limit            int
 	ListInstalled    bool

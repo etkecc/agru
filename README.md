@@ -8,7 +8,8 @@
 * [Non-interactive mode](#non-interactive-mode)
 * [What's the catch?](#whats-the-catch)
     * [only git repos are supported](#only-git-repos-are-supported)
-    * [only roles are supported](#only-roles-are-supported)
+        * [same for collections](#same-for-collections)
+        * [path resolution](#path-resolution)
     * [only list/update/install/remove operations are supported](#only-listupdateinstallremove-operations-are-supported)
 * [Where to get?](#where-to-get)
     * [Binaries and distro-specific packages](#binaries-and-distro-specific-packages)
@@ -22,14 +23,14 @@
 
 **a**nsible-**g**alaxy **r**equirements **u**pdater. A drop-in `ansible-galaxy` replacement that's fast and doesn't argue with you:
 
-* update requirements.yml when a newer git tag (role version) shows up
-* reinstall a role only when its version actually changed in requirements
-* install missing roles
+* update requirements.yml when a newer git tag (role/collection version) shows up
+* reinstall a role/collection only when its version actually changed in requirements
+* install missing roles/collections
 * fully backwards-compatible with `ansible-galaxy`, down to the odd trailing space it leaves in the installed roles' `meta/.galaxy_install_info`
 
 ## Why?
 
-We at [etke.cc](https://etke.cc) maintain a pile of [Ansible roles](https://github.com/orgs/mother-of-all-self-hosting/repositories) and playbooks ([MDAD](https://github.com/spantaleev/matrix-docker-ansible-deploy), [MASH](https://github.com/mother-of-all-self-hosting/mash-playbook), [etke.cc](https://gitlab.com/etke.cc/ansible/)). We wrote A.G.R.U. because `ansible-galaxy` is slow, **very** slow. And irrational. And it skips things you'd expect it to just do:
+We at [etke.cc](https://etke.cc) maintain a pile of [Ansible roles](https://github.com/orgs/mother-of-all-self-hosting/repositories) and playbooks ([MDAD](https://github.com/spantaleev/matrix-docker-ansible-deploy), [MASH](https://github.com/mother-of-all-self-hosting/mash-playbook), [etke.cc](https://github.com/etkecc/ansible/)). We wrote A.G.R.U. because `ansible-galaxy` is slow, **very** slow. And irrational. And it skips things you'd expect it to just do:
 
 * Bumped a role's version in requirements? `ansible-galaxy install -r requirements.yml -p roles/galaxy/` won't install it. You get to add `--force` or delete the dir by hand. agru just does it.
 * Got 100500 roles and want to know which ones have a newer tag? Checking by hand is your evening gone. agru checks all of them at once.
@@ -57,7 +58,7 @@ Update requirements to the newest available tags:
 $ agru -u
 ```
 
-Remove an installed role:
+Remove an installed role or collection:
 
 ```bash
 $ agru -d traefik
@@ -68,13 +69,15 @@ That covers the daily driving. The full set of flags:
 ```bash
 Usage of agru:
   -c	cleanup temporary files (default true)
+  -cp string
+    	path to install collections (default: $ANSIBLE_COLLECTIONS_PATH, then ~/.ansible/collections)
   -d string
-    	delete installed role, all other flags are ignored
-  -i	install missing roles (default true)
+    	delete installed role or collection, all other flags are ignored
+  -i	install missing roles and collections (default true)
   -k	keep TUI open after completion until 'q'
-  -l	list installed roles
+  -l	list installed roles and collections
   -limit int
-    	limit the number of parallel downloads (affects roles installation only). 0 - no limit (default)
+    	limit the number of parallel downloads. 0 - no limit (default)
   -no-tui
     	force non-interactive logging output (no TUI)
   -p string
@@ -99,7 +102,7 @@ Want the plain output from a real terminal too? Force it:
 $ agru -no-tui
 ```
 
-One difference from the TUI, and it's in your favor: the plain path checks whether things actually worked. If it can't write your updated `requirements.yml`, or can't create the roles directory, it says so on stderr and exits non-zero. The TUI swallows both and exits like nothing happened. If you're scripting agru, this is the mode you want.
+One difference from the TUI: the plain path checks whether things actually worked. If it can't write your updated `requirements.yml`, or can't create the roles directory, it says so on stderr and exits non-zero. The TUI swallows both and exits like nothing happened. If you're scripting agru, this is the mode you want.
 
 ## What's the catch?
 
@@ -121,9 +124,44 @@ does **not** work:
   version: 6.1.0
 ```
 
-### only roles are supported
+#### same for collections
 
-No collections at this moment, at all.
+**does** work for collections:
+
+```yaml
+collections:
+  - name: git+https://github.com/ansible-collections/community.docker
+    version: 3.13.0
+```
+
+**does not** work for collections:
+
+```yaml
+collections:
+  - name: community.general
+    version: 8.0.0
+```
+
+Collection entries that agru cannot handle (Galaxy names, version ranges, non-git types,
+extra keys like `source` or `signatures`) are skipped with a one-line notice and preserved
+verbatim on `-u`, exactly like roles with non-git sources.
+
+#### path resolution
+
+Collections are installed under `{collections_path}/ansible_collections/{namespace}/{name}/`.
+The collections path is resolved in this order:
+
+1. `-cp` flag
+2. `$ANSIBLE_COLLECTIONS_PATH` env (first entry)
+3. `$ANSIBLE_COLLECTIONS_PATHS` env (legacy, first entry)
+4. `~/.ansible/collections` (default)
+
+Each installed collection gets a `MANIFEST.json` written by agru so that
+`ansible-galaxy collection list` can see it. agru does not resolve
+transitive `dependencies` from `galaxy.yml`.
+
+Empty version = clone HEAD, always reinstalled. `-u` never pins a version
+onto an empty-version entry.
 
 ### only list/update/install/remove operations are supported
 

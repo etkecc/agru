@@ -2,6 +2,8 @@ package main
 
 import (
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -18,6 +20,9 @@ func TestParseFlagsDefaults(t *testing.T) {
 	}
 	if cfg.RolesPath != "roles/galaxy/" {
 		t.Errorf("default RolesPath = %q", cfg.RolesPath)
+	}
+	if cfg.CollectionsPath == "" {
+		t.Errorf("default CollectionsPath should not be empty")
 	}
 }
 
@@ -97,5 +102,66 @@ func TestParseFlagsVersion(t *testing.T) {
 	_, show := parseFlags()
 	if !show {
 		t.Errorf("showVersion should be true")
+	}
+}
+
+func TestParseFlagsCollectionsPath(t *testing.T) {
+	orig := os.Args
+	defer func() { os.Args = orig }()
+
+	// -cp flag sets collections path
+	os.Args = []string{"agru", "-cp", "/custom/collections"}
+	cfg, _ := parseFlags()
+	if cfg.CollectionsPath != "/custom/collections" {
+		t.Errorf("CollectionsPath = %q, want /custom/collections", cfg.CollectionsPath)
+	}
+}
+
+func TestResolveCollectionsPathEnvPrecedence(t *testing.T) {
+	// Env overrides default
+	t.Setenv("ANSIBLE_COLLECTIONS_PATH", "/env/collections")
+	path, err := resolveCollectionsPath("")
+	if err != nil {
+		t.Fatalf("resolveCollectionsPath error: %v", err)
+	}
+	if path != "/env/collections" {
+		t.Errorf("resolveCollectionsPath = %q, want /env/collections", path)
+	}
+}
+
+func TestResolveCollectionsPathLegacyEnv(t *testing.T) {
+	t.Setenv("ANSIBLE_COLLECTIONS_PATHS", "/legacy/collections:/other")
+	path, err := resolveCollectionsPath("")
+	if err != nil {
+		t.Fatalf("resolveCollectionsPath error: %v", err)
+	}
+	// Should use first entry
+	if path != "/legacy/collections" {
+		t.Errorf("resolveCollectionsPath = %q, want /legacy/collections", path)
+	}
+}
+
+func TestResolveCollectionsPathDefault(t *testing.T) {
+	path, err := resolveCollectionsPath("")
+	if err != nil {
+		t.Fatalf("resolveCollectionsPath error: %v", err)
+	}
+	if !strings.HasSuffix(path, ".ansible/collections") {
+		t.Errorf("resolveCollectionsPath = %q, want suffix .ansible/collections", path)
+	}
+}
+
+func TestResolveCollectionsPathFlagTilde(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, err := resolveCollectionsPath("~/my/collections")
+	if err != nil {
+		t.Fatalf("resolveCollectionsPath error: %v", err)
+	}
+	expected := filepath.Join(home, "my", "collections")
+	if path != expected {
+		t.Errorf("resolveCollectionsPath = %q, want %q", path, expected)
 	}
 }

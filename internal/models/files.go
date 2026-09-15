@@ -43,8 +43,9 @@ func (r File) RolesLen() int {
 
 // FileMap structure represents requirements.yml file with roles key
 type FileMap struct {
-	Roles []*Entry `yaml:"roles"`
-	// Rest keeps collections and any other unmodeled top-level block verbatim, so -u round-trips them.
+	Roles       []*Entry    `yaml:"roles,omitempty"`
+	Collections Collections `yaml:"collections,omitempty"`
+	// Rest keeps any other unmodeled top-level block verbatim, so -u round-trips them.
 	Rest map[string]yaml.Node `yaml:",inline"`
 }
 

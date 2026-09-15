@@ -15,10 +15,12 @@ import (
 
 // RequirementsFile bundles one matched requirements file with its parsed content.
 type RequirementsFile struct {
-	Path       string
-	Entries    models.File
-	Additional models.File
-	Extras     map[string]yaml.Node
+	Path        string
+	Entries     models.File
+	Additional  models.File
+	Extras      map[string]yaml.Node
+	Collections models.Collections
+	MapForm     bool
 }
 
 // ParsePattern expands pattern and parses matched files; multiple patterns can be separated by ';'.
@@ -35,11 +37,11 @@ func (p *Parser) ParsePattern(pattern string) ([]RequirementsFile, error) {
 			return nil, err
 		}
 		for _, path := range paths {
-			entries, additional, extras, err := p.ParseFile(path)
+			entries, additional, colls, extras, mapForm, err := p.ParseFile(path)
 			if err != nil {
 				return nil, err
 			}
-			files = append(files, RequirementsFile{Path: path, Entries: entries, Additional: additional, Extras: extras})
+			files = append(files, RequirementsFile{Path: path, Entries: entries, Additional: additional, Collections: colls, Extras: extras, MapForm: mapForm})
 		}
 	}
 	if len(files) == 0 {
@@ -61,6 +63,17 @@ func (p *Parser) MergeAll(files []RequirementsFile) models.File {
 	return merged
 }
 
+// MergeAllCollections merges all collections across files; earlier files win on FQCN clashes.
+func (p *Parser) MergeAllCollections(files []RequirementsFile) models.Collections {
+	var merged models.Collections
+	for _, f := range files {
+		merged = append(merged, f.Collections...)
+	}
+	merged = merged.Deduplicate()
+	merged.Sort()
+	return merged
+}
+
 // UpdateAll updates every file concurrently, sharing one progress channel that is closed when all files finish.
 func (p *Parser) UpdateAll(files []RequirementsFile, progress chan<- CheckProgress) []error {
 	errs := make([]error, len(files))
@@ -76,7 +89,7 @@ func (p *Parser) UpdateAll(files []RequirementsFile, progress chan<- CheckProgre
 		}()
 		go func() {
 			defer wg.Done()
-			errs[i] = p.UpdateFile(f.Entries, f.Extras, f.Path, ch)
+			errs[i] = p.UpdateFile(f.Entries, f.Collections, f.Extras, f.MapForm, f.Path, ch)
 		}()
 	}
 	wg.Wait()

@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path"
 	"strings"
 	"sync"
 
@@ -30,17 +31,17 @@ func main() {
 	}
 	r := runner.New()
 	p := parser.New(r)
-	inst := installer.New(r, cfg.RolesPath, cfg.Limit, cfg.Cleanup)
+	inst := installer.New(r, cfg.RolesPath, cfg.CollectionsPath, cfg.Limit, cfg.Cleanup)
 
 	// No usable terminal (piped, redirected, CI) or an explicit opt-out: log plain text; bubbletea paints escapes.
 	if cfg.NoTUI || !term.IsTerminal(os.Stdout.Fd()) {
-		if err := cli.Run(cfg, p, inst); err != nil {
+		if err := cli.Run(&cfg, p, inst); err != nil {
 			os.Exit(1)
 		}
 		return
 	}
 
-	prog := tea.NewProgram(tui.New(cfg, p, inst))
+	prog := tea.NewProgram(tui.New(&cfg, p, inst))
 	if _, err := prog.Run(); err != nil {
 		utils.Error(err)
 		os.Exit(1)
@@ -67,7 +68,7 @@ func reorderArgs(args []string) []string {
 				continue
 			}
 			name := strings.TrimLeft(arg, "-")
-			takesValue := name == "r" || name == "p" || name == "d" || name == "limit"
+			takesValue := name == "r" || name == "p" || name == "cp" || name == "d" || name == "limit"
 			if takesValue && i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
 				flags = append(flags, args[i+1])
 				i += 2
@@ -92,6 +93,7 @@ func parseFlags() (config.Config, bool) {
 	)
 	fs.Var(&reqPaths, "r", "ansible-galaxy requirements file, wildcards supported (e.g. molecule/**/requirements.yml). Can be repeated")
 	fs.StringVar(&cfg.RolesPath, "p", "roles/galaxy/", "path to install roles")
+	fs.StringVar(&cfg.CollectionsPath, "cp", "", "path to install collections (default: $ANSIBLE_COLLECTIONS_PATH, then $ANSIBLE_COLLECTIONS_PATHS, then ~/.ansible/collections)")
 	fs.StringVar(&cfg.DeleteName, "d", "", "delete installed role, all other flags are ignored")
 	fs.IntVar(&cfg.Limit, "limit", 0, "limit the number of parallel downloads (affects roles installation only). 0 - no limit (default)")
 	fs.BoolVar(&cfg.ListInstalled, "l", false, "list installed roles")
@@ -126,5 +128,39 @@ func parseFlags() (config.Config, bool) {
 		paths = []string{"requirements.yml"}
 	}
 	cfg.RequirementsPath = strings.Join(paths, ";")
+
+	// Resolve collections path
+	resolved, err := resolveCollectionsPath(cfg.CollectionsPath)
+	if err != nil {
+		utils.Error("resolving collections path:", err)
+		os.Exit(2)
+	}
+	cfg.CollectionsPath = resolved
+
 	return cfg, showVersion
+}
+
+// resolveCollectionsPath resolves the collections path from flag > env > default.
+func resolveCollectionsPath(flagVal string) (string, error) {
+	if flagVal != "" {
+		if strings.HasPrefix(flagVal, "~") {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return "", err
+			}
+			flagVal = path.Join(home, flagVal[1:])
+		}
+		return flagVal, nil
+	}
+	if env := os.Getenv("ANSIBLE_COLLECTIONS_PATH"); env != "" {
+		return strings.Split(env, ":")[0], nil
+	}
+	if env := os.Getenv("ANSIBLE_COLLECTIONS_PATHS"); env != "" {
+		return strings.Split(env, ":")[0], nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return path.Join(home, ".ansible", "collections"), nil
 }

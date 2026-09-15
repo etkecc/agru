@@ -28,23 +28,5 @@ var (
 	styleTitle      = lipgloss.NewStyle().Bold(true)
 )
 
-// icon returns the status icon for a role item.
-func icon(status string) string {
-	switch status {
-	case "done":
-		return styleGreen.Render("✓")
-	case "error":
-		return styleRed.Render("✗")
-	case "active":
-		return styleCyan.Render("●")
-	case "pending":
-		return styleDim.Render("○")
-	case "skipped":
-		return styleDim.Render("-")
-	default:
-		return " "
-	}
-}
-
 // suppress unused style warnings
 var _ = styleNormal

@@ -38,21 +38,25 @@ type Progress struct {
 	Err        error
 }
 
-// Installer installs and manages Ansible roles from a requirements.yml file via a Runner and an fs.FS.
+// Installer installs and manages Ansible roles and collections from a requirements.yml file.
 type Installer struct {
 	runner    runner.Runner
 	fsys      fs.FS
 	rolesPath string
+	collPath  string
+	collFS    fs.FS
 	limit     int
 	cleanup   bool
 }
 
 // New creates a new Installer
-func New(r runner.Runner, rolesPath string, limit int, cleanup bool) *Installer {
+func New(r runner.Runner, rolesPath, collectionsPath string, limit int, cleanup bool) *Installer {
 	return &Installer{
 		runner:    r,
 		fsys:      os.DirFS(rolesPath),
 		rolesPath: rolesPath,
+		collPath:  collectionsPath,
+		collFS:    os.DirFS(collectionsPath),
 		limit:     limit,
 		cleanup:   cleanup,
 	}
@@ -63,40 +67,33 @@ func (i *Installer) FS() fs.FS {
 	return i.fsys
 }
 
-// InstallMissing writes roles missing or outdated; closes progress (if non-nil) when done.
-func (i *Installer) InstallMissing(entries models.File, progress chan<- Progress) error {
+// InstallMissing writes roles and collections missing or outdated; closes progress (if non-nil) when done.
+func (i *Installer) InstallMissing(entries models.File, colls models.Collections, progress chan<- Progress) error {
 	if progress != nil {
-		defer close(progress) // close on every path. the bootstrap-fail return below skips the barrier, and a caller ranging this channel hangs forever otherwise
+		defer close(progress)
 	}
 	if err := i.bootstrapRoles(); err != nil {
 		return err
 	}
-	// roles dir exists now: refresh i.fsys, then snapshot it locally, since goroutines outlive the next reassignment.
-	i.fsys = os.DirFS(i.rolesPath)
-	fsys := i.fsys
-
-	rolesLen := entries.RolesLen()
-	limit := i.limit
-	if limit == 0 {
-		limit = rolesLen
+	if err := i.bootstrapCollections(); err != nil {
+		return err
 	}
-	wp := workpool.New(limit)
+	// dirs exist now: refresh fsys, then snapshot locally.
+	i.fsys = os.DirFS(i.rolesPath)
+	i.collFS = os.DirFS(i.collPath)
+
+	wp := i.newWorkpool(entries.RolesLen() + len(colls))
 	var (
 		mu      sync.Mutex
 		changes models.UpdatedItems
 		errs    []error
 	)
-
-	for _, entry := range entries {
-		if entry.Include != "" { // skip entries with include directive
-			continue
-		}
-		wp.Do(func() {
-			i.installEntry(entry, fsys, &mu, &changes, &errs, progress)
-		})
-	}
+	i.submitRoles(wp, entries, i.fsys, &mu, &changes, &errs, progress)
+	i.submitCollections(wp, colls, &mu, &changes, &errs, progress)
 	wp.Run()
+
 	i.fsys = os.DirFS(i.rolesPath)
+	i.collFS = os.DirFS(i.collPath)
 
 	if len(errs) == 0 {
 		return nil
@@ -106,6 +103,48 @@ func (i *Installer) InstallMissing(entries models.File, progress chan<- Progress
 		errStrs = append(errStrs, err.Error())
 	}
 	return errors.New(strings.Join(errStrs, "\n"))
+}
+
+// newWorkpool creates a workpool with a limit derived from the total item count.
+func (i *Installer) newWorkpool(totalItems int) *workpool.WorkPool {
+	limit := i.limit
+	if limit == 0 {
+		limit = totalItems
+	}
+	if limit < 1 {
+		limit = 1
+	}
+	return workpool.New(limit)
+}
+
+// submitRoles submits role install jobs to the workpool.
+func (i *Installer) submitRoles(wp *workpool.WorkPool, entries models.File, fsys fs.FS, mu *sync.Mutex, changes *models.UpdatedItems, errs *[]error, progress chan<- Progress) {
+	for _, entry := range entries {
+		if entry.Include != "" || entry.Unsupported() != "" {
+			if entry.Unsupported() != "" && progress != nil {
+				progress <- Progress{Name: entry.GetName(), Status: "unsupported", Log: entry.Unsupported()}
+			}
+			continue
+		}
+		wp.Do(func() {
+			i.installEntry(entry, fsys, mu, changes, errs, progress)
+		})
+	}
+}
+
+// submitCollections submits collection install jobs to the workpool.
+func (i *Installer) submitCollections(wp *workpool.WorkPool, colls models.Collections, mu *sync.Mutex, changes *models.UpdatedItems, errs *[]error, progress chan<- Progress) {
+	for _, col := range colls {
+		if col.Unsupported() != "" {
+			if progress != nil {
+				progress <- Progress{Name: col.GetFQCN(), Status: "unsupported", Log: col.Unsupported()}
+			}
+			continue
+		}
+		wp.Do(func() {
+			i.installCollection(col, mu, changes, errs, progress)
+		})
+	}
 }
 
 // installEntry executes a single role install inside the workpool goroutine.
@@ -167,6 +206,17 @@ func (i *Installer) installRole(entry *models.Entry) (installed bool, log string
 	name := entry.GetName()
 
 	repo := strings.Replace(entry.Src, "git+", "", 1)
+
+	// Validate URL and version: no spaces, no leading dash (RCE guard).
+	if err := validateGitArg(repo); err != nil {
+		return false, "", fmt.Errorf("invalid role repo URL %q: %w", repo, err)
+	}
+	if entry.Version != "" {
+		if err := validateGitArg(entry.Version); err != nil {
+			return false, "", fmt.Errorf("invalid role version %q: %w", entry.Version, err)
+		}
+	}
+
 	tmpdir, err := os.MkdirTemp("", "agru-"+name+"-*")
 	if err != nil {
 		return false, "", fmt.Errorf("creating tmp dir: %w", err)
@@ -176,31 +226,15 @@ func (i *Installer) installRole(entry *models.Entry) (installed bool, log string
 		defer i.cleanupRole(tmpdir, tmpfile)
 	}
 
-	// clone repo
-	var clone strings.Builder
-	clone.WriteString("git clone -q --depth 1 ")
-	// git commit
-	if len(entry.Version) >= 40 {
-		clone.WriteString("-c remote.origin.fetch=+")
-		clone.WriteString(entry.Version)
-		clone.WriteString(":refs/remotes/origin/")
-		clone.WriteString(entry.Version)
-	} else { // git tag
-		clone.WriteString("-b ")
-		clone.WriteString(entry.Version)
-	}
-	clone.WriteString(" ")
-	clone.WriteString(repo)
-	clone.WriteString(" ")
-	clone.WriteString(tmpdir)
-
 	logLine := fmt.Sprintf("[%s] cloning %s @ %s", name, repo, entry.Version)
-	out, err := i.runClone(clone.String(), 0)
+	cloneArgs := roleCloneArgs(repo, entry.Version, tmpdir)
+	out, err := i.runCloneArgs(cloneArgs, 0)
 	if err != nil {
 		return false, logLine, fmt.Errorf("cloning repo: %w\n%s", err, out)
 	}
 
-	sha, err := i.runner.Run("git rev-parse HEAD", tmpdir)
+	shaArgs := []string{"git", "rev-parse", "HEAD"}
+	sha, err := i.runner.RunArgs(shaArgs, tmpdir)
 	if err != nil {
 		return false, logLine, fmt.Errorf("getting commit hash: %w", err)
 	}
@@ -214,14 +248,8 @@ func (i *Installer) installRole(entry *models.Entry) (installed bool, log string
 	}
 
 	// create archive from the cloned source
-	var archive strings.Builder
-	archive.WriteString("git archive --prefix=")
-	archive.WriteString(name)
-	archive.WriteString("/ --output=")
-	archive.WriteString(tmpfile)
-	archive.WriteString(" ")
-	archive.WriteString(entry.Version)
-	out, err = i.runner.Run(archive.String(), tmpdir)
+	archiveArgs := []string{"git", "archive", "--prefix=" + name + "/", "--output=" + tmpfile, entry.Version}
+	out, err = i.runner.RunArgs(archiveArgs, tmpdir)
 	if err != nil {
 		return false, logLine, fmt.Errorf("archiving repo: %w\n%s", err, out)
 	}
@@ -232,7 +260,8 @@ func (i *Installer) installRole(entry *models.Entry) (installed bool, log string
 	}
 
 	// extract the archive into roles path
-	out, err = i.runner.Run("tar -xf "+tmpfile, i.rolesPath)
+	tarArgs := []string{"tar", "-xf", tmpfile}
+	out, err = i.runner.RunArgs(tarArgs, i.rolesPath)
 	if err != nil {
 		return false, logLine, fmt.Errorf("extracting archive: %w\n%s", err, out)
 	}
@@ -249,6 +278,19 @@ func (i *Installer) installRole(entry *models.Entry) (installed bool, log string
 	return true, logLine, nil
 }
 
+// roleCloneArgs builds a safe argv slice for git clone of a role repo.
+func roleCloneArgs(repo, version, tmpdir string) []string {
+	args := []string{"git", "clone", "-q", "--depth", "1"}
+	if version != "" {
+		if len(version) >= 40 {
+			args = append(args, "-c", "remote.origin.fetch=+"+version+":refs/remotes/origin/"+version)
+		} else {
+			args = append(args, "-b", version)
+		}
+	}
+	return append(args, "--", repo, tmpdir)
+}
+
 // runClone runs git clone with exponential-backoff retry on network failures
 func (i *Installer) runClone(cmd string, attempt int) (string, error) {
 	out, err := i.runner.Run(cmd, "")
@@ -261,6 +303,22 @@ func (i *Installer) runClone(cmd string, attempt int) (string, error) {
 		delay := RetryStepDelay * time.Duration(attempt)
 		time.Sleep(delay)
 		return i.runClone(cmd, attempt+1)
+	}
+
+	return out, err
+}
+
+// runCloneArgs runs git clone via RunArgs with exponential-backoff retry on network failures.
+func (i *Installer) runCloneArgs(args []string, attempt int) (string, error) {
+	out, err := i.runner.RunArgs(args, "")
+	if err == nil {
+		return out, nil
+	}
+
+	if strings.Contains(out, "Couldn't connect to server") && attempt < RetriesMax {
+		delay := RetryStepDelay * time.Duration(attempt)
+		time.Sleep(delay)
+		return i.runCloneArgs(args, attempt+1)
 	}
 
 	return out, err

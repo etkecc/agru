@@ -35,6 +35,10 @@ func (r *fakeRunner) Run(command, _ string) (string, error) {
 	return r.outputs[command], nil
 }
 
+func (r *fakeRunner) RunArgs(args []string, dir string) (string, error) {
+	return r.Run(strings.Join(args, " "), dir)
+}
+
 func writeTemp(t *testing.T, content string) string {
 	t.Helper()
 	f, err := os.CreateTemp(t.TempDir(), "requirements-*.yml")
@@ -58,7 +62,7 @@ func TestParseFileDirectList(t *testing.T) {
 	path := writeTemp(t, content)
 	p := New(newFakeRunner())
 
-	main, additional, _, err := p.ParseFile(path)
+	main, additional, colls, _, mapForm, err := p.ParseFile(path)
 	if err != nil {
 		t.Fatalf("ParseFile() error = %v", err)
 	}
@@ -67,6 +71,12 @@ func TestParseFileDirectList(t *testing.T) {
 	}
 	if len(main) != 2 {
 		t.Fatalf("ParseFile() main len = %d, want 2", len(main))
+	}
+	if len(colls) != 0 {
+		t.Errorf("ParseFile() colls len = %d, want 0", len(colls))
+	}
+	if mapForm {
+		t.Errorf("ParseFile() mapForm = true, want false for list form")
 	}
 	// Sorted alphabetically: custom-name before role-a
 	if main[0].GetName() != "custom-name" {
@@ -87,12 +97,15 @@ func TestParseFileMapFormat(t *testing.T) {
 	path := writeTemp(t, content)
 	p := New(newFakeRunner())
 
-	main, _, _, err := p.ParseFile(path)
+	main, _, _, _, mapForm, err := p.ParseFile(path)
 	if err != nil {
 		t.Fatalf("ParseFile() error = %v", err)
 	}
 	if len(main) != 2 {
 		t.Errorf("ParseFile() main len = %d, want 2", len(main))
+	}
+	if !mapForm {
+		t.Errorf("ParseFile() mapForm = false, want true for map form")
 	}
 }
 
@@ -105,7 +118,8 @@ func TestParseFileDeduplicate(t *testing.T) {
 	path := writeTemp(t, content)
 	p := New(newFakeRunner())
 
-	main, _, _, err := p.ParseFile(path)
+	main, _, _, _, mapForm, err := p.ParseFile(path)
+	_ = mapForm
 	if err != nil {
 		t.Fatalf("ParseFile() error = %v", err)
 	}
@@ -132,7 +146,7 @@ func TestParseFileWithInclude(t *testing.T) {
 	}
 
 	p := New(newFakeRunner())
-	main, additional, _, err := p.ParseFile(mainPath)
+	main, additional, _, _, _, err := p.ParseFile(mainPath)
 	if err != nil {
 		t.Fatalf("ParseFile() error = %v", err)
 	}
@@ -150,7 +164,12 @@ func TestParseFileWithInclude(t *testing.T) {
 
 func TestParseFileNotFound(t *testing.T) {
 	p := New(newFakeRunner())
-	_, _, _, err := p.ParseFile("/nonexistent/requirements.yml")
+	main, additional, colls, extras, mapForm, err := p.ParseFile("/nonexistent/requirements.yml")
+	_ = main
+	_ = additional
+	_ = colls
+	_ = extras
+	_ = mapForm
 	if err == nil {
 		t.Error("ParseFile() expected error for missing file, got nil")
 	}
@@ -245,7 +264,7 @@ func TestUpdateFile(t *testing.T) {
 	tmpPath := writeTemp(t, "")
 	p := New(fr)
 
-	if err := p.UpdateFile(entries, nil, tmpPath, nil); err != nil {
+	if err := p.UpdateFile(entries, nil, nil, false, tmpPath, nil); err != nil {
 		t.Fatalf("UpdateFile() error = %v", err)
 	}
 
@@ -336,11 +355,11 @@ roles:
 	path := writeTemp(t, content)
 	p := New(fr)
 
-	entries, _, extras, err := p.ParseFile(path)
+	entries, _, colls, extras, mapForm, err := p.ParseFile(path)
 	if err != nil {
 		t.Fatalf("ParseFile() error = %v", err)
 	}
-	if err := p.UpdateFile(entries, extras, path, nil); err != nil {
+	if err := p.UpdateFile(entries, colls, extras, mapForm, path, nil); err != nil {
 		t.Fatalf("UpdateFile() error = %v", err)
 	}
 
@@ -376,14 +395,14 @@ roles:
 	path := writeTemp(t, content)
 	p := New(fr)
 
-	entries, _, extras, err := p.ParseFile(path)
+	entries, _, colls, extras, mapForm, err := p.ParseFile(path)
 	if err != nil {
 		t.Fatalf("ParseFile() error = %v", err)
 	}
 	if err := os.Chmod(path, 0o200); err != nil {
 		t.Fatalf("chmod: %v", err)
 	}
-	if err := p.UpdateFile(entries, extras, path, nil); err != nil {
+	if err := p.UpdateFile(entries, colls, extras, mapForm, path, nil); err != nil {
 		t.Fatalf("UpdateFile() error = %v", err)
 	}
 	if err := os.Chmod(path, 0o600); err != nil {

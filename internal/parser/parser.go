@@ -18,15 +18,16 @@ var ignoredVersions = map[string]bool{
 	"master": true,
 }
 
-// CheckProgress represents a version check result for a single role.
+// CheckProgress represents a version check result for a single role or collection.
 type CheckProgress struct {
 	Name   string
 	OldVer string
 	NewVer string // empty = up to date; non-empty = newer version found
+	Notice string // unsupported-entry reason, empty when supported
 	Err    error
 }
 
-// Parser parses and updates Ansible Galaxy requirements.yml files, checking versions via a Runner's git ls-remote.
+// Parser parses and updates Ansible Galaxy requirements.yml files.
 type Parser struct {
 	runner runner.Runner
 }
@@ -36,30 +37,45 @@ func New(r runner.Runner) *Parser {
 	return &Parser{runner: r}
 }
 
-// ParseFile parses requirements.yml; extras holds unmodeled top-level blocks so UpdateFile can round-trip them.
-func (p *Parser) ParseFile(path string) (main, additional models.File, extras map[string]yaml.Node, err error) {
+// ParseFile parses requirements.yml; returns roles, collections, extras, and mapForm flag.
+//
+//nolint:gocritic // 6 values by design, matches 4 parsed concerns
+func (p *Parser) ParseFile(path string) (main, additional models.File, colls models.Collections, extras map[string]yaml.Node, mapForm bool, err error) {
 	fileb, err := os.ReadFile(path)
 	if err != nil {
-		return models.File{}, models.File{}, nil, fmt.Errorf("reading file %s: %w", path, err)
+		return models.File{}, models.File{}, nil, nil, false, fmt.Errorf("reading file %s: %w", path, err)
 	}
 	var req models.File
 	if err := yaml.Unmarshal(fileb, &req); err != nil {
 		var reqMap models.FileMap
 		if err := yaml.Unmarshal(fileb, &reqMap); err != nil {
-			return models.File{}, models.File{}, nil, fmt.Errorf("unmarshalling yaml %s: %w", path, err)
+			return models.File{}, models.File{}, nil, nil, false, fmt.Errorf("unmarshalling yaml %s: %w", path, err)
 		}
 		req = reqMap.Slice()
 		extras = reqMap.Rest
+		colls = reqMap.Collections.Deduplicate()
+		colls.Sort()
+		mapForm = true
 	}
 	req = req.Deduplicate()
 	req.Sort()
 
-	additional, err = p.parseAdditionalFile(req)
-	if err != nil {
-		return models.File{}, models.File{}, nil, fmt.Errorf("parsing additional file: %w", err)
+	// Flag unsupported role entries for both list and map forms
+	for _, entry := range req {
+		if entry.Include != "" {
+			continue
+		}
+		if entry.Src != "" && !models.IsGitURL(entry.Src) {
+			entry.SetUnsupported("not a git source")
+		}
 	}
 
-	return req, additional, extras, nil
+	additional, err = p.parseAdditionalFile(req)
+	if err != nil {
+		return models.File{}, models.File{}, nil, nil, false, fmt.Errorf("parsing additional file: %w", err)
+	}
+
+	return req, additional, colls, extras, mapForm, nil
 }
 
 // parseAdditionalFile parses additional requirements.yml files referenced via include
@@ -67,8 +83,7 @@ func (p *Parser) parseAdditionalFile(req models.File) (models.File, error) {
 	additional := make([]*models.Entry, 0)
 	for _, entry := range req {
 		if entry.Include != "" {
-			// no recursive iteration over deeper levels, because it's not used anywhere
-			additionalLvl1, additionalLvl2, _, err := p.ParseFile(entry.Include)
+			additionalLvl1, additionalLvl2, _, _, _, err := p.ParseFile(entry.Include)
 			if err != nil {
 				return nil, err
 			}
@@ -81,9 +96,32 @@ func (p *Parser) parseAdditionalFile(req models.File) (models.File, error) {
 }
 
 // UpdateFile updates requirements.yml with the latest versions; closes the progress channel (if non-nil) when done.
-func (p *Parser) UpdateFile(entries models.File, extras map[string]yaml.Node, requirementsPath string, progress chan<- CheckProgress) error {
-	_, errs := p.checkVersions(entries, progress)
+func (p *Parser) UpdateFile(entries models.File, colls models.Collections, extras map[string]yaml.Node, mapForm bool, requirementsPath string, progress chan<- CheckProgress) error {
+	// Build checkItems from roles and collections.
+	items := make([]checkItem, 0, len(entries)+len(colls))
+	for _, entry := range entries {
+		if entry.Include != "" {
+			continue
+		}
+		items = append(items, checkItem{
+			display: entry.GetName(),
+			src:     entry.Src,
+			version: entry.Version,
+			notice:  entry.Unsupported(),
+			setVer:  func(v string) { entry.Version = v },
+		})
+	}
+	for _, col := range colls {
+		items = append(items, checkItem{
+			display: col.GetFQCN(),
+			src:     col.Name,
+			version: col.Version,
+			notice:  col.Unsupported(),
+			setVer:  func(v string) { col.Version = v },
+		})
+	}
 
+	_, errs := p.checkItems(items, progress)
 	if len(errs) > 0 {
 		errStrs := make([]string, 0, len(errs))
 		for _, err := range errs {
@@ -96,8 +134,8 @@ func (p *Parser) UpdateFile(entries models.File, extras map[string]yaml.Node, re
 		outb []byte
 		err  error
 	)
-	if len(extras) > 0 {
-		outb, err = p.marshal(models.FileMap{Roles: entries, Rest: extras})
+	if mapForm || len(colls) > 0 || len(extras) > 0 {
+		outb, err = p.marshal(models.FileMap{Roles: entries, Collections: colls, Rest: extras})
 	} else {
 		outb, err = p.marshal(entries)
 	}
@@ -123,34 +161,17 @@ func (p *Parser) marshal(v any) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// checkEntry checks a single entry for a newer version and updates it in place.
-func (p *Parser) checkEntry(i int, entry *models.Entry, entries models.File, mu *sync.Mutex, changes *models.UpdatedItems, errs *[]error, progress chan<- CheckProgress) {
-	newVersion, err := p.getNewVersion(entry.Src, entry.Version)
-	mu.Lock()
-	defer mu.Unlock()
-	if err != nil {
-		*errs = append(*errs, fmt.Errorf("getting new version for %s@%s: %w", entry.GetName(), entry.Version, err))
-		if progress != nil {
-			progress <- CheckProgress{Name: entry.GetName(), OldVer: entry.Version, Err: err}
-		}
-		return
-	}
-	if newVersion != "" {
-		*changes = changes.Add(entry.GetName(), entry.Version, newVersion)
-		if progress != nil {
-			progress <- CheckProgress{Name: entry.GetName(), OldVer: entry.Version, NewVer: newVersion}
-		}
-		entry.Version = newVersion
-		entries[i] = entry
-		return
-	}
-	if progress != nil {
-		progress <- CheckProgress{Name: entry.GetName(), OldVer: entry.Version}
-	}
+// checkItem is a single version-check item for a role or collection.
+type checkItem struct {
+	display string // roles: GetName(); collections: GetFQCN()
+	src     string // roles: Src; collections: Name
+	version string
+	notice  string // Unsupported() reason, empty when supported
+	setVer  func(string)
 }
 
-// checkVersions concurrently checks and updates all entries in place, closing progress (if non-nil) when done.
-func (p *Parser) checkVersions(entries models.File, progress chan<- CheckProgress) (models.UpdatedItems, []error) {
+// checkItems concurrently checks and updates all items, closing progress (if non-nil) when done.
+func (p *Parser) checkItems(items []checkItem, progress chan<- CheckProgress) (models.UpdatedItems, []error) {
 	var (
 		mu      sync.Mutex
 		wg      sync.WaitGroup
@@ -158,15 +179,8 @@ func (p *Parser) checkVersions(entries models.File, progress chan<- CheckProgres
 		errs    []error
 	)
 
-	for i, entry := range entries {
-		if entry.Include != "" { // skip entries with include directive
-			continue
-		}
-		wg.Add(1)
-		go func(i int, entry *models.Entry) {
-			defer wg.Done()
-			p.checkEntry(i, entry, entries, &mu, &changes, &errs, progress)
-		}(i, entry)
+	for _, item := range items {
+		wg.Go(func() { p.checkOneItem(item, &mu, &changes, &errs, progress) })
 	}
 	wg.Wait()
 	if progress != nil {
@@ -175,7 +189,53 @@ func (p *Parser) checkVersions(entries models.File, progress chan<- CheckProgres
 	return changes, errs
 }
 
-// MergeFiles merges all requirements.yml entries into one deduplicated slice, prioritizing the main file's entries.
+// checkOneItem checks a single item for a newer version and updates it in place.
+func (p *Parser) checkOneItem(item checkItem, mu *sync.Mutex, changes *models.UpdatedItems, errs *[]error, progress chan<- CheckProgress) {
+	// Unsupported entry: emit notice row, no network.
+	if item.notice != "" {
+		if progress != nil {
+			mu.Lock()
+			progress <- CheckProgress{Name: item.display, Notice: item.notice}
+			mu.Unlock()
+		}
+		return
+	}
+
+	// Empty version: HEAD semantics, -u never pins it. Emit up-to-date row.
+	if item.version == "" {
+		if progress != nil {
+			mu.Lock()
+			progress <- CheckProgress{Name: item.display, OldVer: ""}
+			mu.Unlock()
+		}
+		return
+	}
+
+	// Check for newer version via ls-remote.
+	newVersion, err := p.getNewVersion(item.src, item.version)
+	mu.Lock()
+	defer mu.Unlock()
+	if err != nil {
+		*errs = append(*errs, fmt.Errorf("getting new version for %s@%s: %w", item.display, item.version, err))
+		if progress != nil {
+			progress <- CheckProgress{Name: item.display, OldVer: item.version, Err: err}
+		}
+		return
+	}
+	if newVersion != "" {
+		*changes = changes.Add(item.display, item.version, newVersion)
+		if progress != nil {
+			progress <- CheckProgress{Name: item.display, OldVer: item.version, NewVer: newVersion}
+		}
+		item.setVer(newVersion)
+		return
+	}
+	if progress != nil {
+		progress <- CheckProgress{Name: item.display, OldVer: item.version}
+	}
+}
+
+// MergeFiles merges all requirements.yml entries into one deduplicated slice.
 func (p *Parser) MergeFiles(mainReq models.File, additionalReqs ...models.File) models.File {
 	uniq := make(map[string]*models.Entry, 0)
 	for _, entry := range mainReq {
@@ -208,7 +268,7 @@ func (p *Parser) getNewVersion(src, version string) (string, error) {
 	}
 
 	// not a git repo
-	if !strings.Contains(src, "git") {
+	if !models.IsGitURL(src) {
 		return "", nil
 	}
 
