@@ -1,4 +1,4 @@
-// Package config holds agru's runtime configuration, shared by the TUI, the CLI, and main's dispatch.
+// Package config holds agru's runtime configuration, shared by the CLI and main's dispatch.
 package config
 
 // Config holds the configuration for a single agru run, derived from CLI flags.
@@ -13,6 +13,5 @@ type Config struct {
 	UpdateFile       bool
 	Cleanup          bool
 	Verbose          bool
-	Keep             bool // keep the TUI open after completion until 'q'; ignored in non-interactive mode
-	NoTUI            bool // force non-interactive logging output even when stdout is a terminal
+	NoTUI            bool // accepted for compatibility; interactive mode was removed
 }

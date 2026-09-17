@@ -5,7 +5,7 @@
 * [What?](#what)
 * [Why?](#why)
 * [How?](#how)
-* [Non-interactive mode](#non-interactive-mode)
+* [Output](#output)
 * [What's the catch?](#whats-the-catch)
     * [only git repos are supported](#only-git-repos-are-supported)
         * [same for collections](#same-for-collections)
@@ -74,12 +74,11 @@ Usage of agru:
   -d string
     	delete installed role or collection, all other flags are ignored
   -i	install missing roles and collections (default true)
-  -k	keep TUI open after completion until 'q'
   -l	list installed roles and collections
   -limit int
     	limit the number of parallel downloads. 0 - no limit (default)
   -no-tui
-    	force non-interactive logging output (no TUI)
+    	deprecated, interactive mode was removed
   -p string
     	path to install roles (default "roles/galaxy/")
   -r string
@@ -92,17 +91,9 @@ Usage of agru:
     	print version and exit
 ```
 
-## Non-interactive mode
+## Output
 
-agru draws a TUI when it has a terminal to draw on. Pipe it, redirect it, or run it in CI, and that TUI just garbles your log with escape codes. So when stdout isn't a terminal, agru skips the TUI and logs plain text instead: one line per role, errors on stderr, everything else on stdout.
-
-Want the plain output from a real terminal too? Force it:
-
-```bash
-$ agru -no-tui
-```
-
-One difference from the TUI: the plain path checks whether things actually worked. If it can't write your updated `requirements.yml`, or can't create the roles directory, it says so on stderr and exits non-zero. The TUI swallows both and exits like nothing happened. If you're scripting agru, this is the mode you want.
+agru logs plain text: one line per role, errors on stderr, everything else on stdout. If it can't write your updated `requirements.yml`, or can't create the roles directory, it says so on stderr and exits non-zero. If you're scripting agru, pipe it; that's what it's made for.
 
 ## What's the catch?
 

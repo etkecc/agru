@@ -1,4 +1,4 @@
-// Package cli drives agru without the TUI, emitting plain colorless line logs for a file or CI log.
+// Package cli drives agru, emitting plain colorless line logs for a file or CI log.
 package cli
 
 import (
@@ -14,7 +14,7 @@ import (
 	"github.com/etkecc/agru/internal/utils"
 )
 
-// Run executes the flag-selected action against the same services the TUI uses. Mirrors handleParsed.
+// Run executes the flag-selected action: parse requirements, then list, delete, update, or install.
 func Run(cfg *config.Config, p *parser.Parser, inst *installer.Installer) error {
 	files, err := p.ParsePattern(cfg.RequirementsPath)
 	if err != nil {
@@ -30,7 +30,7 @@ func Run(cfg *config.Config, p *parser.Parser, inst *installer.Installer) error 
 	case cfg.DeleteName != "":
 		return runDelete(cfg, merged, mergedColls)
 	case cfg.UpdateFile:
-		// on -u -i we stop if the update failed, unlike the TUI, which installs unreproducible versions anyway.
+		// on -u -i we stop if the update failed, which would otherwise install unreproducible versions.
 		if err := runUpdate(cfg, p, files); err != nil {
 			return err
 		}

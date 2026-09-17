@@ -8,8 +8,6 @@ import (
 	"strings"
 	"sync"
 
-	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/x/term"
 	"github.com/etkecc/go-kit"
 
 	"github.com/etkecc/agru/internal/cli"
@@ -17,7 +15,6 @@ import (
 	"github.com/etkecc/agru/internal/installer"
 	"github.com/etkecc/agru/internal/parser"
 	"github.com/etkecc/agru/internal/runner"
-	"github.com/etkecc/agru/internal/tui"
 	"github.com/etkecc/agru/internal/utils"
 )
 
@@ -33,17 +30,7 @@ func main() {
 	p := parser.New(r)
 	inst := installer.New(r, cfg.RolesPath, cfg.CollectionsPath, cfg.Limit, cfg.Cleanup)
 
-	// No usable terminal (piped, redirected, CI) or an explicit opt-out: log plain text; bubbletea paints escapes.
-	if cfg.NoTUI || !term.IsTerminal(os.Stdout.Fd()) {
-		if err := cli.Run(&cfg, p, inst); err != nil {
-			os.Exit(1)
-		}
-		return
-	}
-
-	prog := tea.NewProgram(tui.New(&cfg, p, inst))
-	if _, err := prog.Run(); err != nil {
-		utils.Error(err)
+	if err := cli.Run(&cfg, p, inst); err != nil {
 		os.Exit(1)
 	}
 }
@@ -101,8 +88,7 @@ func parseFlags() (config.Config, bool) {
 	fs.BoolVar(&cfg.UpdateFile, "u", false, "update requirements file if newer versions are available")
 	fs.BoolVar(&cfg.Cleanup, "c", true, "cleanup temporary files")
 	fs.BoolVar(&cfg.Verbose, "verbose", false, "verbose output")
-	fs.BoolVar(&cfg.Keep, "k", false, "keep TUI open after completion until 'q'")
-	fs.BoolVar(&cfg.NoTUI, "no-tui", false, "force non-interactive logging output (no TUI)")
+	fs.BoolVar(&cfg.NoTUI, "no-tui", false, "deprecated, interactive mode was removed")
 	fs.BoolVar(&showVersion, "v", false, "print version and exit")
 	fs.BoolVar(&showVersion, "version", false, "print version and exit")
 	if err := fs.Parse(args); err != nil {
