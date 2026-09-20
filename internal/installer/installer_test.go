@@ -26,7 +26,7 @@ func newFakeRunner() *fakeRunner {
 	}
 }
 
-func (r *fakeRunner) Run(command, _ string) (string, error) {
+func (r *fakeRunner) run(command, _ string) (string, error) {
 	r.calls = append(r.calls, command)
 	for key, out := range r.outputs {
 		if strings.HasPrefix(command, key) {
@@ -37,7 +37,7 @@ func (r *fakeRunner) Run(command, _ string) (string, error) {
 }
 
 func (r *fakeRunner) RunArgs(args []string, dir string) (string, error) {
-	return r.Run(strings.Join(args, " "), dir)
+	return r.run(strings.Join(args, " "), dir)
 }
 
 func (r *fakeRunner) called(prefix string) bool {
@@ -49,17 +49,13 @@ func (r *fakeRunner) called(prefix string) bool {
 	return false
 }
 
-// callbackRunner calls a function for each Run invocation
+// callbackRunner calls a function for each RunArgs invocation
 type callbackRunner struct {
 	fn func(command, dir string) (string, error)
 }
 
-func (r *callbackRunner) Run(command, dir string) (string, error) {
-	return r.fn(command, dir)
-}
-
 func (r *callbackRunner) RunArgs(args []string, dir string) (string, error) {
-	return r.Run(strings.Join(args, " "), dir)
+	return r.fn(strings.Join(args, " "), dir)
 }
 
 func TestGetInstalled(t *testing.T) {
@@ -90,21 +86,21 @@ func TestGetInstalled(t *testing.T) {
 	}
 }
 
-func TestRunCloneSuccess(t *testing.T) {
+func TestRunCloneArgsSuccess(t *testing.T) {
 	fr := newFakeRunner()
 	fr.outputs["git clone"] = ""
 
 	inst := &Installer{runner: fr}
-	_, err := inst.runClone("git clone -q --depth 1 -b v1.0.0 https://github.com/org/role /tmp/dir", 0)
+	_, err := inst.runCloneArgs([]string{"git", "clone", "-q", "--depth", "1", "-b", "v1.0.0", "--", "https://github.com/org/role", "/tmp/dir"}, 0)
 	if err != nil {
-		t.Errorf("runClone() unexpected error = %v", err)
+		t.Errorf("runCloneArgs() unexpected error = %v", err)
 	}
 	if !fr.called("git clone") {
-		t.Error("runClone() should have called git clone")
+		t.Error("runCloneArgs() should have called git clone")
 	}
 }
 
-func TestRunCloneRetryOnNetworkError(t *testing.T) {
+func TestRunCloneArgsRetryOnNetworkError(t *testing.T) {
 	callCount := 0
 	inst := &Installer{runner: &callbackRunner{
 		fn: func(_, _ string) (string, error) {
@@ -116,16 +112,16 @@ func TestRunCloneRetryOnNetworkError(t *testing.T) {
 		},
 	}}
 
-	_, err := inst.runClone("git clone -q --depth 1 -b v1.0.0 https://example.com/role /tmp/dir", 0)
+	_, err := inst.runCloneArgs([]string{"git", "clone", "-q", "--depth", "1", "-b", "v1.0.0", "--", "https://example.com/role", "/tmp/dir"}, 0)
 	if err != nil {
-		t.Errorf("runClone() should succeed after retry, got error = %v", err)
+		t.Errorf("runCloneArgs() should succeed after retry, got error = %v", err)
 	}
 	if callCount != 2 {
-		t.Errorf("runClone() call count = %d, want 2 (1 failure + 1 retry)", callCount)
+		t.Errorf("runCloneArgs() call count = %d, want 2 (1 failure + 1 retry)", callCount)
 	}
 }
 
-func TestRunCloneMaxRetries(t *testing.T) {
+func TestRunCloneArgsMaxRetries(t *testing.T) {
 	callCount := 0
 	inst := &Installer{runner: &callbackRunner{
 		fn: func(_, _ string) (string, error) {
@@ -134,17 +130,17 @@ func TestRunCloneMaxRetries(t *testing.T) {
 		},
 	}}
 
-	_, err := inst.runClone("git clone -q --depth 1 -b v1.0.0 https://example.com/role /tmp/dir", 0)
+	_, err := inst.runCloneArgs([]string{"git", "clone", "-q", "--depth", "1", "-b", "v1.0.0", "--", "https://example.com/role", "/tmp/dir"}, 0)
 	if err == nil {
-		t.Error("runClone() should return error when max retries exceeded")
+		t.Error("runCloneArgs() should return error when max retries exceeded")
 	}
 	// initial call + RetriesMax retries
 	if callCount != RetriesMax+1 {
-		t.Errorf("runClone() call count = %d, want %d (1 initial + %d retries)", callCount, RetriesMax+1, RetriesMax)
+		t.Errorf("runCloneArgs() call count = %d, want %d (1 initial + %d retries)", callCount, RetriesMax+1, RetriesMax)
 	}
 }
 
-func TestRunCloneNoRetryOnOtherError(t *testing.T) {
+func TestRunCloneArgsNoRetryOnOtherError(t *testing.T) {
 	callCount := 0
 	inst := &Installer{runner: &callbackRunner{
 		fn: func(_, _ string) (string, error) {
@@ -153,12 +149,12 @@ func TestRunCloneNoRetryOnOtherError(t *testing.T) {
 		},
 	}}
 
-	_, err := inst.runClone("git clone -q --depth 1 -b v1.0.0 https://example.com/role /tmp/dir", 0)
+	_, err := inst.runCloneArgs([]string{"git", "clone", "-q", "--depth", "1", "-b", "v1.0.0", "--", "https://example.com/role", "/tmp/dir"}, 0)
 	if err == nil {
-		t.Error("runClone() should return error for non-network failures")
+		t.Error("runCloneArgs() should return error for non-network failures")
 	}
 	if callCount != 1 {
-		t.Errorf("runClone() should not retry non-network errors, call count = %d, want 1", callCount)
+		t.Errorf("runCloneArgs() should not retry non-network errors, call count = %d, want 1", callCount)
 	}
 }
 
@@ -357,6 +353,151 @@ func TestInstallMissingConcurrentNoDatRace(t *testing.T) {
 
 	if err := inst.InstallMissing(entries, nil, nil); err != nil {
 		t.Fatalf("InstallMissing() concurrent error = %v", err)
+	}
+}
+
+func TestInstallRoleRejectsEscapingSymlink(t *testing.T) {
+	tmpDir := t.TempDir()
+	rolesPath := filepath.Join(tmpDir, "roles")
+	if err := os.MkdirAll(rolesPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(tmpDir, "outside")
+	if err := os.MkdirAll(outside, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	sentinel := filepath.Join(outside, ".galaxy_install_info")
+	sentinelText := "sentinel do not touch"
+	if err := os.WriteFile(sentinel, []byte(sentinelText), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	commitSHA := strings.Repeat("c", 40)
+	tarCalled := false
+	inst := &Installer{
+		runner: &callbackRunner{fn: func(command, _ string) (string, error) {
+			if strings.HasPrefix(command, "git clone") {
+				// last word of the joined command is the clone target tmpdir
+				parts := strings.Split(command, " ")
+				if err := os.Symlink(outside, filepath.Join(parts[len(parts)-1], "meta")); err != nil {
+					return "", err
+				}
+				return "", nil
+			}
+			if strings.HasPrefix(command, "git rev-parse HEAD") {
+				return commitSHA, nil
+			}
+			if strings.HasPrefix(command, "tar -xf") {
+				tarCalled = true
+			}
+			return "", nil
+		}},
+		fsys:      os.DirFS(rolesPath),
+		rolesPath: rolesPath,
+		cleanup:   false,
+	}
+
+	entry := &models.Entry{}
+	entry.Name = "evil-role"
+	entry.Src = "git+https://github.com/org/evil-role.git"
+	entry.Version = "v1.0.0"
+
+	_, _, err := inst.installRole(entry)
+	if err == nil || !strings.Contains(err.Error(), "escapes") {
+		t.Fatalf("installRole() = %v, want escaping symlink error", err)
+	}
+
+	got, readErr := os.ReadFile(sentinel)
+	if readErr != nil || string(got) != sentinelText {
+		t.Errorf("sentinel changed: readErr=%v content=%q", readErr, string(got))
+	}
+	if _, statErr := os.Stat(filepath.Join(rolesPath, "evil-role")); !os.IsNotExist(statErr) {
+		t.Errorf("installRole() created roles dir for rejected role: stat err = %v", statErr)
+	}
+	if tarCalled {
+		t.Error("installRole() ran tar after rejecting the role")
+	}
+}
+
+func TestInstallRoleRejectsBadName(t *testing.T) {
+	tmpDir := t.TempDir()
+	rolesPath := filepath.Join(tmpDir, "roles")
+	if err := os.MkdirAll(rolesPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	sibling := filepath.Join(rolesPath, "sibling.txt")
+	if err := os.WriteFile(sibling, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var calls []string
+	inst := &Installer{
+		runner: &callbackRunner{fn: func(command, _ string) (string, error) {
+			calls = append(calls, command)
+			return "", nil
+		}},
+		fsys:      os.DirFS(rolesPath),
+		rolesPath: rolesPath,
+	}
+
+	entry := &models.Entry{}
+	entry.Name = ".."
+	entry.Src = "git+https://github.com/org/bad.git"
+	entry.Version = "v1.0.0"
+
+	_, _, err := inst.installRole(entry)
+	if err == nil || !strings.Contains(err.Error(), "invalid role name") {
+		t.Fatalf("installRole() = %v, want invalid role name error", err)
+	}
+	if _, statErr := os.Stat(sibling); statErr != nil {
+		t.Errorf("sibling.txt disappeared: %v", statErr)
+	}
+	for _, c := range calls {
+		if strings.HasPrefix(c, "git") || strings.HasPrefix(c, "tar") {
+			t.Errorf("installRole() ran a command for a rejected name: %q", c)
+		}
+	}
+}
+
+func TestInstallRoleFailedCloneCleansTmpDir(t *testing.T) {
+	rolesPath := filepath.Join(t.TempDir(), "roles")
+	if err := os.MkdirAll(rolesPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	count := func() int {
+		entries, _ := os.ReadDir(os.TempDir())
+		n := 0
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name(), "agru-leak-role-") {
+				n++
+			}
+		}
+		return n
+	}
+	before := count()
+	inst := &Installer{
+		runner: &callbackRunner{fn: func(command, _ string) (string, error) {
+			if strings.HasPrefix(command, "git clone") {
+				return "", errors.New("exit status 128")
+			}
+			return "", nil
+		}},
+		fsys:      os.DirFS(rolesPath),
+		rolesPath: rolesPath,
+		cleanup:   true,
+	}
+
+	entry := &models.Entry{}
+	entry.Name = "leak-role"
+	entry.Src = "git+https://github.com/org/leak-role.git"
+	entry.Version = "v1.0.0"
+
+	_, _, err := inst.installRole(entry)
+	if err == nil {
+		t.Fatal("installRole() = nil, want clone error")
+	}
+	if after := count(); after != before {
+		t.Errorf("failed clone leaked tmp dirs: before=%d after=%d", before, after)
 	}
 }
 

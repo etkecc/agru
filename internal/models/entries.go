@@ -3,6 +3,7 @@ package models
 import (
 	"io/fs"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 
@@ -12,6 +13,13 @@ import (
 var forcedVersions = map[string]bool{
 	"main":   true,
 	"master": true,
+}
+
+var roleNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+
+// IsValidRoleName reports whether name is safe to use as a single path component under the roles dir.
+func IsValidRoleName(name string) bool {
+	return roleNamePattern.MatchString(name)
 }
 
 // GalaxyInstallInfo is meta/.galaxy_install_info struct

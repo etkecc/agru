@@ -18,6 +18,8 @@ var ignoredVersions = map[string]bool{
 	"master": true,
 }
 
+const maxIncludeDepth = 2
+
 // CheckProgress represents a version check result for a single role or collection.
 type CheckProgress struct {
 	Name   string
@@ -40,7 +42,12 @@ func New(r runner.Runner) *Parser {
 // ParseFile parses requirements.yml; returns roles, collections, extras, and mapForm flag.
 //
 //nolint:gocritic // 6 values by design, matches 4 parsed concerns
-func (p *Parser) ParseFile(path string) (main, additional models.File, colls models.Collections, extras map[string]yaml.Node, mapForm bool, err error) {
+func (p *Parser) ParseFile(path string) (models.File, models.File, models.Collections, map[string]yaml.Node, bool, error) {
+	return p.parseFile(path, 0)
+}
+
+// parseFile is the depth-tracked ParseFile implementation, used for include expansion
+func (p *Parser) parseFile(path string, depth int) (main, additional models.File, colls models.Collections, extras map[string]yaml.Node, mapForm bool, err error) { //nolint:gocritic // 6 results by design
 	fileb, err := os.ReadFile(path)
 	if err != nil {
 		return models.File{}, models.File{}, nil, nil, false, fmt.Errorf("reading file %s: %w", path, err)
@@ -70,7 +77,7 @@ func (p *Parser) ParseFile(path string) (main, additional models.File, colls mod
 		}
 	}
 
-	additional, err = p.parseAdditionalFile(req)
+	additional, err = p.parseAdditionalFile(req, depth)
 	if err != nil {
 		return models.File{}, models.File{}, nil, nil, false, fmt.Errorf("parsing additional file: %w", err)
 	}
@@ -79,17 +86,21 @@ func (p *Parser) ParseFile(path string) (main, additional models.File, colls mod
 }
 
 // parseAdditionalFile parses additional requirements.yml files referenced via include
-func (p *Parser) parseAdditionalFile(req models.File) (models.File, error) {
+func (p *Parser) parseAdditionalFile(req models.File, depth int) (models.File, error) {
 	additional := make([]*models.Entry, 0)
 	for _, entry := range req {
-		if entry.Include != "" {
-			additionalLvl1, additionalLvl2, _, _, _, err := p.ParseFile(entry.Include)
-			if err != nil {
-				return nil, err
-			}
-			additional = append(additional, additionalLvl1...)
-			additional = append(additional, additionalLvl2...)
+		if entry.Include == "" {
+			continue
 		}
+		if depth+1 > maxIncludeDepth {
+			return nil, fmt.Errorf("include depth exceeded (max %d levels)", maxIncludeDepth)
+		}
+		additionalLvl1, additionalLvl2, _, _, _, err := p.parseFile(entry.Include, depth+1)
+		if err != nil {
+			return nil, err
+		}
+		additional = append(additional, additionalLvl1...)
+		additional = append(additional, additionalLvl2...)
 	}
 
 	return additional, nil
@@ -273,7 +284,10 @@ func (p *Parser) getNewVersion(src, version string) (string, error) {
 	}
 
 	repo := strings.Replace(src, "git+https", "https", 1)
-	tags, err := p.runner.Run("git ls-remote -tq --sort=-version:refname "+repo, "")
+	if err := models.ValidateGitArg(repo); err != nil {
+		return "", fmt.Errorf("invalid role repo URL %q: %w", repo, err)
+	}
+	tags, err := p.runner.RunArgs([]string{"git", "ls-remote", "-tq", "--sort=-version:refname", repo}, "")
 	if err != nil {
 		return "", fmt.Errorf("running git ls-remote: %w", err)
 	}

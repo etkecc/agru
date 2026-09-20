@@ -24,7 +24,7 @@ func newFakeRunner() *fakeRunner {
 	return &fakeRunner{outputs: make(map[string]string)}
 }
 
-func (r *fakeRunner) Run(command, _ string) (string, error) {
+func (r *fakeRunner) run(command, _ string) (string, error) {
 	r.mu.Lock()
 	r.calls = append(r.calls, command)
 	r.mu.Unlock()
@@ -37,7 +37,7 @@ func (r *fakeRunner) Run(command, _ string) (string, error) {
 }
 
 func (r *fakeRunner) RunArgs(args []string, dir string) (string, error) {
-	return r.Run(strings.Join(args, " "), dir)
+	return r.run(strings.Join(args, " "), dir)
 }
 
 func (r *fakeRunner) called(prefix string) bool {

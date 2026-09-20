@@ -204,39 +204,29 @@ func (i *Installer) GetInstalled(entries models.File) models.File {
 // installRole writes the specific role version to the target roles dir, returning whether it installed and a log line.
 func (i *Installer) installRole(entry *models.Entry) (installed bool, log string, err error) {
 	name := entry.GetName()
+	if !models.IsValidRoleName(name) {
+		return false, "", fmt.Errorf("invalid role name %q", name)
+	}
 
 	repo := strings.Replace(entry.Src, "git+", "", 1)
 
 	// Validate URL and version: no spaces, no leading dash (RCE guard).
-	if err := validateGitArg(repo); err != nil {
+	if err := models.ValidateGitArg(repo); err != nil {
 		return false, "", fmt.Errorf("invalid role repo URL %q: %w", repo, err)
 	}
 	if entry.Version != "" {
-		if err := validateGitArg(entry.Version); err != nil {
+		if err := models.ValidateGitArg(entry.Version); err != nil {
 			return false, "", fmt.Errorf("invalid role version %q: %w", entry.Version, err)
 		}
 	}
 
-	tmpdir, err := os.MkdirTemp("", "agru-"+name+"-*")
-	if err != nil {
-		return false, "", fmt.Errorf("creating tmp dir: %w", err)
-	}
-	tmpfile := tmpdir + ".tar"
+	logLine := fmt.Sprintf("[%s] cloning %s @ %s", name, repo, entry.Version)
+	tmpdir, tmpfile, sha, err := i.cloneRole(name, repo, entry.Version)
 	if i.cleanup {
 		defer i.cleanupRole(tmpdir, tmpfile)
 	}
-
-	logLine := fmt.Sprintf("[%s] cloning %s @ %s", name, repo, entry.Version)
-	cloneArgs := roleCloneArgs(repo, entry.Version, tmpdir)
-	out, err := i.runCloneArgs(cloneArgs, 0)
 	if err != nil {
-		return false, logLine, fmt.Errorf("cloning repo: %w\n%s", err, out)
-	}
-
-	shaArgs := []string{"git", "rev-parse", "HEAD"}
-	sha, err := i.runner.RunArgs(shaArgs, tmpdir)
-	if err != nil {
-		return false, logLine, fmt.Errorf("getting commit hash: %w", err)
+		return false, logLine, err
 	}
 	logLine = fmt.Sprintf("[%s] cloned %s @ %s (sha: %s)", name, repo, entry.Version, sha)
 
@@ -247,9 +237,14 @@ func (i *Installer) installRole(entry *models.Entry) (installed bool, log string
 		return false, logLine, nil
 	}
 
+	// SHA-pinned clones check out HEAD, so the archive tree may differ; the write sink is guarded by assertRegularDir.
+	if err := verifyRoleTree(tmpdir); err != nil {
+		return false, logLine, fmt.Errorf("unsafe role content: %w", err)
+	}
+
 	// create archive from the cloned source
 	archiveArgs := []string{"git", "archive", "--prefix=" + name + "/", "--output=" + tmpfile, entry.Version}
-	out, err = i.runner.RunArgs(archiveArgs, tmpdir)
+	out, err := i.runner.RunArgs(archiveArgs, tmpdir)
 	if err != nil {
 		return false, logLine, fmt.Errorf("archiving repo: %w\n%s", err, out)
 	}
@@ -267,15 +262,31 @@ func (i *Installer) installRole(entry *models.Entry) (installed bool, log string
 	}
 
 	// write install info file
-	outb, err := entry.GenerateInstallInfo(sha)
-	if err != nil {
-		return false, logLine, fmt.Errorf("generating install info: %w", err)
-	}
-	if err := os.WriteFile(path.Join(i.rolesPath, name, "meta", ".galaxy_install_info"), outb, 0o600); err != nil {
-		return false, logLine, fmt.Errorf("writing install info: %w", err)
+	if err := i.writeRoleInstallInfo(name, entry, sha); err != nil {
+		return false, logLine, err
 	}
 
 	return true, logLine, nil
+}
+
+// writeRoleInstallInfo validates the meta dir and writes .galaxy_install_info under it.
+func (i *Installer) writeRoleInstallInfo(name string, entry *models.Entry, sha string) error {
+	if err := assertRegularDir(path.Join(i.rolesPath, name, "meta")); err != nil {
+		return fmt.Errorf("refusing to write install info: %w", err)
+	}
+	infoPath := path.Join(i.rolesPath, name, "meta", ".galaxy_install_info")
+	// Remove first: unlinks a repo-supplied symlink without following it, like the collection manifest write.
+	if err := os.Remove(infoPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("removing existing install info: %w", err)
+	}
+	outb, err := entry.GenerateInstallInfo(sha)
+	if err != nil {
+		return fmt.Errorf("generating install info: %w", err)
+	}
+	if err := os.WriteFile(infoPath, outb, 0o600); err != nil {
+		return fmt.Errorf("writing install info: %w", err)
+	}
+	return nil
 }
 
 // roleCloneArgs builds a safe argv slice for git clone of a role repo.
@@ -289,23 +300,6 @@ func roleCloneArgs(repo, version, tmpdir string) []string {
 		}
 	}
 	return append(args, "--", repo, tmpdir)
-}
-
-// runClone runs git clone with exponential-backoff retry on network failures
-func (i *Installer) runClone(cmd string, attempt int) (string, error) {
-	out, err := i.runner.Run(cmd, "")
-	if err == nil {
-		return out, nil
-	}
-
-	// git clone failure text on a network blip, e.g. "Failed to connect to github.com... Couldn't connect to server"
-	if strings.Contains(out, "Couldn't connect to server") && attempt < RetriesMax {
-		delay := RetryStepDelay * time.Duration(attempt)
-		time.Sleep(delay)
-		return i.runClone(cmd, attempt+1)
-	}
-
-	return out, err
 }
 
 // runCloneArgs runs git clone via RunArgs with exponential-backoff retry on network failures.
@@ -322,6 +316,31 @@ func (i *Installer) runCloneArgs(args []string, attempt int) (string, error) {
 	}
 
 	return out, err
+}
+
+// cloneRole clones the role repo into a fresh tmpdir and returns the dir, tar path, and HEAD sha.
+func (i *Installer) cloneRole(name, repo, version string) (tmpdir, tmpfile, sha string, err error) {
+	tmpdir, err = os.MkdirTemp("", "agru-"+name+"-*")
+	if err != nil {
+		return "", "", "", fmt.Errorf("creating tmp dir: %w", err)
+	}
+	tmpfile = tmpdir + ".tar"
+	out, err := i.runCloneArgs(roleCloneArgs(repo, version, tmpdir), 0)
+	if err != nil {
+		return tmpdir, tmpfile, "", fmt.Errorf("cloning repo: %w\n%s", err, out)
+	}
+	// >=40 clones check out the default branch; switch to the pinned ref so the tree matches git archive.
+	if len(version) >= 40 {
+		out, err = i.runner.RunArgs([]string{"git", "checkout", "-q", version}, tmpdir)
+		if err != nil {
+			return tmpdir, tmpfile, "", fmt.Errorf("checking out pinned version: %w\n%s", err, out)
+		}
+	}
+	sha, err = i.runner.RunArgs([]string{"git", "rev-parse", "HEAD"}, tmpdir)
+	if err != nil {
+		return tmpdir, tmpfile, "", fmt.Errorf("getting commit hash: %w", err)
+	}
+	return tmpdir, tmpfile, sha, nil
 }
 
 // bootstrapRoles creates the roles directory if it doesn't exist

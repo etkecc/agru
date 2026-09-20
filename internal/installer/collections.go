@@ -5,7 +5,6 @@ import (
 	"io/fs"
 	"os"
 	"path"
-	"strings"
 	"sync"
 
 	"gopkg.in/yaml.v3"
@@ -64,11 +63,11 @@ func (i *Installer) installCollectionFiles(entry *models.Collection) (string, er
 	}
 
 	// Validate URL and version: no spaces, no leading dash (RCE guard).
-	if err := validateGitArg(repoURL); err != nil {
+	if err := models.ValidateGitArg(repoURL); err != nil {
 		return "", fmt.Errorf("invalid collection repo URL %q: %w", repoURL, err)
 	}
 	if entry.Version != "" {
-		if err := validateGitArg(entry.Version); err != nil {
+		if err := models.ValidateGitArg(entry.Version); err != nil {
 			return "", fmt.Errorf("invalid collection version %q: %w", entry.Version, err)
 		}
 	}
@@ -89,6 +88,10 @@ func (i *Installer) installCollectionFiles(entry *models.Collection) (string, er
 		return logLine, fmt.Errorf("cloning repo: %w\n%s", err, out)
 	}
 
+	if err := verifyRoleTree(tmpdir); err != nil {
+		return logLine, fmt.Errorf("unsafe collection content: %w", err)
+	}
+
 	// Read and validate galaxy.yml
 	galaxy, err := i.readGalaxy(tmpdir)
 	if err != nil {
@@ -105,20 +108,27 @@ func (i *Installer) installCollectionFiles(entry *models.Collection) (string, er
 	}
 
 	// Write MANIFEST.json (symlink-safe)
-	manifestPath := path.Join(target, "MANIFEST.json")
-	if err := os.Remove(manifestPath); err != nil && !os.IsNotExist(err) {
-		return logLine, fmt.Errorf("removing existing MANIFEST.json: %w", err)
-	}
-
-	manifestData, err := entry.GenerateManifest(galaxy)
-	if err != nil {
-		return logLine, fmt.Errorf("generating manifest: %w", err)
-	}
-	if err := os.WriteFile(manifestPath, manifestData, 0o600); err != nil {
-		return logLine, fmt.Errorf("writing MANIFEST.json: %w", err)
+	if err := i.writeCollectionManifest(entry, galaxy, target); err != nil {
+		return logLine, err
 	}
 
 	return logLine, nil
+}
+
+// writeCollectionManifest replaces MANIFEST.json in target with the generated manifest.
+func (i *Installer) writeCollectionManifest(entry *models.Collection, galaxy map[string]any, target string) error {
+	manifestPath := path.Join(target, "MANIFEST.json")
+	if err := os.Remove(manifestPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("removing existing MANIFEST.json: %w", err)
+	}
+	manifestData, err := entry.GenerateManifest(galaxy)
+	if err != nil {
+		return fmt.Errorf("generating manifest: %w", err)
+	}
+	if err := os.WriteFile(manifestPath, manifestData, 0o600); err != nil {
+		return fmt.Errorf("writing MANIFEST.json: %w", err)
+	}
+	return nil
 }
 
 // archiveAndExtract creates a git archive and extracts it into the target directory.
@@ -228,18 +238,4 @@ func collectionCloneArgs(repoURL, version, tmpdir string) []string {
 		}
 	}
 	return append(args, "--", repoURL, tmpdir)
-}
-
-// validateGitArg rejects strings that could inject git options (spaces, leading dash).
-func validateGitArg(s string) error {
-	if s == "" {
-		return fmt.Errorf("empty argument")
-	}
-	if strings.HasPrefix(s, "-") {
-		return fmt.Errorf("must not start with dash (possible option injection)")
-	}
-	if strings.Contains(s, " ") {
-		return fmt.Errorf("must not contain spaces (possible option injection)")
-	}
-	return nil
 }

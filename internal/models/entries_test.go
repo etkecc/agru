@@ -180,3 +180,33 @@ func TestIsInstalled(t *testing.T) {
 		}
 	})
 }
+
+func TestIsValidRoleName(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		{input: "my-role", want: true},
+		{input: "a.b_c", want: true},
+		{input: "x1", want: true},
+		{input: "a..b", want: true},
+		{input: "A-Z9", want: true},
+		{input: "", want: false},
+		{input: "..", want: false},
+		{input: ".", want: false},
+		{input: "a/b", want: false},
+		{input: "a\\b", want: false},
+		{input: "-x", want: false},
+		{input: ".hidden", want: false},
+		{input: "a b", want: false},
+		{input: "x/", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			if got := IsValidRoleName(tt.input); got != tt.want {
+				t.Errorf("IsValidRoleName(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}

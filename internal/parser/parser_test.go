@@ -25,7 +25,7 @@ func newFakeRunner() *fakeRunner {
 	}
 }
 
-func (r *fakeRunner) Run(command, _ string) (string, error) {
+func (r *fakeRunner) run(command, _ string) (string, error) {
 	r.mu.Lock()
 	r.calls = append(r.calls, command)
 	r.mu.Unlock()
@@ -36,7 +36,7 @@ func (r *fakeRunner) Run(command, _ string) (string, error) {
 }
 
 func (r *fakeRunner) RunArgs(args []string, dir string) (string, error) {
-	return r.Run(strings.Join(args, " "), dir)
+	return r.run(strings.Join(args, " "), dir)
 }
 
 func writeTemp(t *testing.T, content string) string {
@@ -416,4 +416,71 @@ roles:
 	if !strings.Contains(string(out), "community.general") {
 		t.Errorf("UpdateFile() ate collections when the file was unreadable at write time:\n%s", out)
 	}
+}
+
+func TestGetNewVersionRejectsSpaceInRepo(t *testing.T) {
+	p := New(newFakeRunner())
+	_, err := p.getNewVersion("git+https://example.com/x.git extra", "v1.0.0")
+	if err == nil || !strings.Contains(err.Error(), "space") {
+		t.Fatalf("getNewVersion() = %v, want space rejection", err)
+	}
+}
+
+func TestParseFileIncludeDepth(t *testing.T) {
+	write := func(t *testing.T, dir, name, content string) string {
+		t.Helper()
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+
+	t.Run("self include", func(t *testing.T) {
+		selfPath := filepath.Join(t.TempDir(), "requirements.yml")
+		if err := os.WriteFile(selfPath, []byte("- include: "+selfPath+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		p := New(newFakeRunner())
+		_, _, _, _, _, err := p.ParseFile(selfPath)
+		if err == nil || !strings.Contains(err.Error(), "depth") {
+			t.Fatalf("ParseFile() = %v, want depth error", err)
+		}
+	})
+
+	t.Run("three level chain", func(t *testing.T) {
+		dir := t.TempDir()
+		d := write(t, dir, "d.yml", "- src: git+https://github.com/org/d.git\n  version: v1.0.0\n")
+		c := write(t, dir, "c.yml", "- include: "+d+"\n")
+		b := write(t, dir, "b.yml", "- include: "+c+"\n")
+		a := write(t, dir, "a.yml", "- include: "+b+"\n")
+
+		p := New(newFakeRunner())
+		_, _, _, _, _, err := p.ParseFile(a)
+		if err == nil || !strings.Contains(err.Error(), "depth") {
+			t.Fatalf("ParseFile() = %v, want depth error", err)
+		}
+	})
+
+	t.Run("two level chain ok", func(t *testing.T) {
+		dir := t.TempDir()
+		c := write(t, dir, "c.yml", "- src: git+https://github.com/org/c.git\n  version: v1.0.0\n")
+		b := write(t, dir, "b.yml", "- include: "+c+"\n")
+		a := write(t, dir, "a.yml", "- include: "+b+"\n")
+
+		p := New(newFakeRunner())
+		_, additional, _, _, _, err := p.ParseFile(a)
+		if err != nil {
+			t.Fatalf("ParseFile() = %v, want no error", err)
+		}
+		found := false
+		for _, e := range additional {
+			if e.GetName() == "c" && e.Src != "" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("ParseFile() additional does not contain role c: %v", additional)
+		}
+	})
 }

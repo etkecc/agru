@@ -71,6 +71,11 @@ func runDelete(cfg *config.Config, merged models.File, mergedColls models.Collec
 		if entry.GetName() != cfg.DeleteName {
 			continue
 		}
+		if !models.IsValidRoleName(entry.GetName()) {
+			err := fmt.Errorf("invalid role name %q", entry.GetName())
+			utils.Error(err)
+			return err
+		}
 		if err := os.RemoveAll(path.Join(cfg.RolesPath, entry.GetName())); err != nil {
 			utils.Error(err)
 			return err

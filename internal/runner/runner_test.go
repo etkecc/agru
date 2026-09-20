@@ -4,43 +4,43 @@ import (
 	"testing"
 )
 
-func TestShellRunnerRun(t *testing.T) {
+func TestShellRunnerRunArgs(t *testing.T) {
 	r := New()
 
 	t.Run("returns stdout output", func(t *testing.T) {
-		out, err := r.Run("echo hello", "")
+		out, err := r.RunArgs([]string{"echo", "hello"}, "")
 		if err != nil {
-			t.Fatalf("Run() error = %v", err)
+			t.Fatalf("RunArgs() error = %v", err)
 		}
 		if out != "hello" {
-			t.Errorf("Run() = %q, want %q", out, "hello")
+			t.Errorf("RunArgs() = %q, want %q", out, "hello")
 		}
 	})
 
 	t.Run("returns error for failing command", func(t *testing.T) {
-		_, err := r.Run("false", "")
+		_, err := r.RunArgs([]string{"false"}, "")
 		if err == nil {
-			t.Error("Run() expected error for 'false' command, got nil")
+			t.Error("RunArgs() expected error for 'false' command, got nil")
 		}
 	})
 
 	t.Run("runs in specified directory", func(t *testing.T) {
-		out, err := r.Run("pwd", "/tmp")
+		out, err := r.RunArgs([]string{"pwd"}, "/tmp")
 		if err != nil {
-			t.Fatalf("Run() error = %v", err)
+			t.Fatalf("RunArgs() error = %v", err)
 		}
 		if out != "/tmp" {
-			t.Errorf("Run() pwd = %q, want /tmp", out)
+			t.Errorf("RunArgs() pwd = %q, want /tmp", out)
 		}
 	})
 
 	t.Run("trims trailing newline from output", func(t *testing.T) {
-		out, err := r.Run("printf hello", "")
+		out, err := r.RunArgs([]string{"printf", "hello"}, "")
 		if err != nil {
-			t.Fatalf("Run() error = %v", err)
+			t.Fatalf("RunArgs() error = %v", err)
 		}
 		if out != "hello" {
-			t.Errorf("Run() = %q, want %q", out, "hello")
+			t.Errorf("RunArgs() = %q, want %q", out, "hello")
 		}
 	})
 }
