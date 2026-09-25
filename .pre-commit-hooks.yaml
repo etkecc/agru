@@ -1,0 +1,7 @@
+- id: agru
+  name: agru
+  description: Update Ansible Galaxy requirements to the newest git tags and install the new versions
+  entry: agru
+  args: ["-u"]
+  language: golang
+  files: requirements.*\.ya?ml

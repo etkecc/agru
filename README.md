@@ -15,6 +15,7 @@
     * [Binaries and distro-specific packages](#binaries-and-distro-specific-packages)
     * [Homebrew](#homebrew)
     * [Build yourself](#build-yourself)
+* [pre-commit](#pre-commit)
 * [Who uses it?](#who-uses-it)
 
 <!-- vim-markdown-toc -->
@@ -186,6 +187,20 @@ $ brew install agru
 ### Build yourself
 
 `just build` or `go build .`
+
+## pre-commit
+
+agru ships a [pre-commit](https://pre-commit.com) hook, so you can bump role and collection pins to the newest git tags without Renovate. Add to your `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: https://github.com/etkecc/agru
+    rev: v0.3.0
+    hooks:
+      - id: agru
+```
+
+The hook runs `agru -u` on every `requirements*.yml` it finds: the staged ones on `git commit`, all of them with `pre-commit run agru --all-files` in CI. It bumps the pins and installs the new versions.
 
 ## Who uses it?
 
