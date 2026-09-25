@@ -118,6 +118,10 @@ test packages="./...":
     @go tool cover -func=cover.out
     -@rm -f cover.out
 
+# run consumer e2e (real binary, real roles, network)
+e2e:
+    @go test -tags e2e -count=1 -v -timeout 20m ./e2e/...
+
 # run app
 run:
     @go run ./cmd/agru
