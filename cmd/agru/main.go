@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path"
 	"strings"
 	"sync"
 
@@ -14,6 +13,7 @@ import (
 	"github.com/etkecc/agru/internal/config"
 	"github.com/etkecc/agru/internal/installer"
 	"github.com/etkecc/agru/internal/parser"
+	"github.com/etkecc/agru/internal/pathfinder"
 	"github.com/etkecc/agru/internal/runner"
 	"github.com/etkecc/agru/internal/utils"
 )
@@ -26,6 +26,13 @@ func main() {
 		fmt.Println(version)
 		return
 	}
+	// version and help need no paths, so resolution happens once we know we are doing real work
+	if err := pathfinder.ResolveInstallPaths(&cfg); err != nil {
+		utils.Error(err)
+		os.Exit(2)
+	}
+	utils.Debug(cfg.Verbose, "roles path:", cfg.RolesPath)
+	utils.Debug(cfg.Verbose, "collections path:", cfg.CollectionsPath)
 	r := runner.New()
 	p := parser.New(r)
 	inst := installer.New(r, cfg.RolesPath, cfg.CollectionsPath, cfg.Limit, cfg.Cleanup)
@@ -79,12 +86,12 @@ func parseFlags() (config.Config, bool) {
 		reqPaths    stringSlice
 	)
 	fs.Var(&reqPaths, "r", "ansible-galaxy requirements file, wildcards supported (e.g. molecule/**/requirements.yml). Can be repeated")
-	fs.StringVar(&cfg.RolesPath, "p", "roles/galaxy/", "path to install roles")
-	fs.StringVar(&cfg.CollectionsPath, "cp", "", "path to install collections (default: $ANSIBLE_COLLECTIONS_PATH, then $ANSIBLE_COLLECTIONS_PATHS, then ~/.ansible/collections)")
-	fs.StringVar(&cfg.DeleteName, "d", "", "delete installed role, all other flags are ignored")
+	fs.StringVar(&cfg.RolesPath, "p", "", "path to install roles (default: $ANSIBLE_ROLES_PATH, then $ANSIBLE_HOME/roles, then ~/.ansible/roles)")
+	fs.StringVar(&cfg.CollectionsPath, "cp", "", "path to install collections (default: $ANSIBLE_COLLECTIONS_PATH, then $ANSIBLE_COLLECTIONS_PATHS, then $ANSIBLE_HOME/collections, then ~/.ansible/collections)")
+	fs.StringVar(&cfg.DeleteName, "d", "", "delete installed role or collection, all other flags are ignored")
 	fs.IntVar(&cfg.Limit, "limit", 0, "limit the number of parallel downloads (affects roles installation only). 0 - no limit (default)")
-	fs.BoolVar(&cfg.ListInstalled, "l", false, "list installed roles")
-	fs.BoolVar(&cfg.InstallMissing, "i", true, "install missing roles")
+	fs.BoolVar(&cfg.ListInstalled, "l", false, "list installed roles and collections")
+	fs.BoolVar(&cfg.InstallMissing, "i", true, "install missing roles and collections")
 	fs.BoolVar(&cfg.UpdateFile, "u", false, "update requirements file if newer versions are available")
 	fs.BoolVar(&cfg.Cleanup, "c", true, "cleanup temporary files")
 	fs.BoolVar(&cfg.Verbose, "verbose", false, "verbose output")
@@ -115,38 +122,5 @@ func parseFlags() (config.Config, bool) {
 	}
 	cfg.RequirementsPath = strings.Join(paths, ";")
 
-	// Resolve collections path
-	resolved, err := resolveCollectionsPath(cfg.CollectionsPath)
-	if err != nil {
-		utils.Error("resolving collections path:", err)
-		os.Exit(2)
-	}
-	cfg.CollectionsPath = resolved
-
 	return cfg, showVersion
-}
-
-// resolveCollectionsPath resolves the collections path from flag > env > default.
-func resolveCollectionsPath(flagVal string) (string, error) {
-	if flagVal != "" {
-		if strings.HasPrefix(flagVal, "~") {
-			home, err := os.UserHomeDir()
-			if err != nil {
-				return "", err
-			}
-			flagVal = path.Join(home, flagVal[1:])
-		}
-		return flagVal, nil
-	}
-	if env := os.Getenv("ANSIBLE_COLLECTIONS_PATH"); env != "" {
-		return strings.Split(env, ":")[0], nil
-	}
-	if env := os.Getenv("ANSIBLE_COLLECTIONS_PATHS"); env != "" {
-		return strings.Split(env, ":")[0], nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return path.Join(home, ".ansible", "collections"), nil
 }

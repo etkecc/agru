@@ -2,8 +2,6 @@ package main
 
 import (
 	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -17,12 +15,6 @@ func TestParseFlagsDefaults(t *testing.T) {
 	}
 	if cfg.RequirementsPath != "requirements.yml" {
 		t.Errorf("default RequirementsPath = %q, want requirements.yml", cfg.RequirementsPath)
-	}
-	if cfg.RolesPath != "roles/galaxy/" {
-		t.Errorf("default RolesPath = %q", cfg.RolesPath)
-	}
-	if cfg.CollectionsPath == "" {
-		t.Errorf("default CollectionsPath should not be empty")
 	}
 }
 
@@ -117,51 +109,14 @@ func TestParseFlagsCollectionsPath(t *testing.T) {
 	}
 }
 
-func TestResolveCollectionsPathEnvPrecedence(t *testing.T) {
-	// Env overrides default
-	t.Setenv("ANSIBLE_COLLECTIONS_PATH", "/env/collections")
-	path, err := resolveCollectionsPath("")
-	if err != nil {
-		t.Fatalf("resolveCollectionsPath error: %v", err)
-	}
-	if path != "/env/collections" {
-		t.Errorf("resolveCollectionsPath = %q, want /env/collections", path)
-	}
-}
+func TestParseFlagsRolesPath(t *testing.T) {
+	orig := os.Args
+	defer func() { os.Args = orig }()
 
-func TestResolveCollectionsPathLegacyEnv(t *testing.T) {
-	t.Setenv("ANSIBLE_COLLECTIONS_PATHS", "/legacy/collections:/other")
-	path, err := resolveCollectionsPath("")
-	if err != nil {
-		t.Fatalf("resolveCollectionsPath error: %v", err)
-	}
-	// Should use first entry
-	if path != "/legacy/collections" {
-		t.Errorf("resolveCollectionsPath = %q, want /legacy/collections", path)
-	}
-}
-
-func TestResolveCollectionsPathDefault(t *testing.T) {
-	path, err := resolveCollectionsPath("")
-	if err != nil {
-		t.Fatalf("resolveCollectionsPath error: %v", err)
-	}
-	if !strings.HasSuffix(path, ".ansible/collections") {
-		t.Errorf("resolveCollectionsPath = %q, want suffix .ansible/collections", path)
-	}
-}
-
-func TestResolveCollectionsPathFlagTilde(t *testing.T) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	path, err := resolveCollectionsPath("~/my/collections")
-	if err != nil {
-		t.Fatalf("resolveCollectionsPath error: %v", err)
-	}
-	expected := filepath.Join(home, "my", "collections")
-	if path != expected {
-		t.Errorf("resolveCollectionsPath = %q, want %q", path, expected)
+	// -p flag sets roles path
+	os.Args = []string{"agru", "-p", "/custom/roles"}
+	cfg, _ := parseFlags()
+	if cfg.RolesPath != "/custom/roles" {
+		t.Errorf("RolesPath = %q, want /custom/roles", cfg.RolesPath)
 	}
 }

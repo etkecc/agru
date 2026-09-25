@@ -1,6 +1,7 @@
 package installer
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -11,6 +12,9 @@ import (
 
 	"github.com/etkecc/agru/internal/models"
 )
+
+// installMarkerName is the file agru drops into a collection dir while it is being replaced.
+const installMarkerName = ".agru-install-marker"
 
 // installCollection executes a single collection install inside the workpool goroutine.
 func (i *Installer) installCollection(entry *models.Collection, mu *sync.Mutex, changes *models.UpdatedItems, errs *[]error, progress chan<- Progress) {
@@ -103,12 +107,7 @@ func (i *Installer) installCollectionFiles(entry *models.Collection) (string, er
 	}
 
 	// Archive and extract into target
-	if err := i.archiveAndExtract(tmpdir, tmpfile, entry.Version, target); err != nil {
-		return logLine, err
-	}
-
-	// Write MANIFEST.json (symlink-safe)
-	if err := i.writeCollectionManifest(entry, galaxy, target); err != nil {
+	if err := i.archiveAndExtract(entry, galaxy, tmpdir, tmpfile, target); err != nil {
 		return logLine, err
 	}
 
@@ -131,9 +130,9 @@ func (i *Installer) writeCollectionManifest(entry *models.Collection, galaxy map
 	return nil
 }
 
-// archiveAndExtract creates a git archive and extracts it into the target directory.
-func (i *Installer) archiveAndExtract(tmpdir, tmpfile, version, target string) error {
-	archiveRef := version
+// archiveAndExtract creates a git archive of the clone and extracts it into the target dir.
+func (i *Installer) archiveAndExtract(entry *models.Collection, galaxy map[string]any, tmpdir, tmpfile, target string) error {
+	archiveRef := entry.Version
 	if archiveRef == "" {
 		archiveRef = "HEAD"
 	}
@@ -141,7 +140,7 @@ func (i *Installer) archiveAndExtract(tmpdir, tmpfile, version, target string) e
 	if _, err := i.runner.RunArgs(archiveArgs, tmpdir); err != nil {
 		return fmt.Errorf("archiving repo: %w", err)
 	}
-	return i.extractCollection(target, tmpfile)
+	return i.extractCollection(entry, galaxy, target, tmpfile)
 }
 
 // readGalaxy reads and parses galaxy.yml from the cloned repo.
@@ -170,17 +169,32 @@ func (i *Installer) validateGalaxyNamespace(galaxy map[string]any, entry *models
 	return nil
 }
 
-// extractCollection removes the target dir, recreates it, and extracts the archive.
-func (i *Installer) extractCollection(target, tmpfile string) error {
-	if err := os.RemoveAll(target); err != nil {
-		return fmt.Errorf("removing existing collection dir: %w", err)
+// extractCollection replaces an installed collection with the archive, marked as agru's while it runs.
+func (i *Installer) extractCollection(entry *models.Collection, galaxy map[string]any, target, tmpfile string) error {
+	if err := RemoveCollectionDir(target); err != nil {
+		return err
 	}
-	if err := os.MkdirAll(target, 0o755); err != nil {
+	if err := os.MkdirAll(path.Dir(target), 0o755); err != nil {
 		return fmt.Errorf("creating target dir: %w", err)
+	}
+	if err := os.Mkdir(target, 0o700); err != nil && !errors.Is(err, fs.ErrExist) {
+		return fmt.Errorf("creating target dir: %w", err)
+	}
+	marker := path.Join(target, installMarkerName)
+	// marker first: an interrupted install stays replaceable, and a manifest here would read as installed
+	if err := os.WriteFile(marker, []byte(entry.GetFQCN()), 0o600); err != nil {
+		return fmt.Errorf("writing install marker: %w", err)
 	}
 	tarArgs := []string{"tar", "-xf", tmpfile}
 	if _, err := i.runner.RunArgs(tarArgs, target); err != nil {
 		return fmt.Errorf("extracting archive: %w", err)
+	}
+	// manifest after the tree is in place, so a half-extracted dir never claims to be installed
+	if err := i.writeCollectionManifest(entry, galaxy, target); err != nil {
+		return err
+	}
+	if err := os.Remove(marker); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("removing install marker: %w", err)
 	}
 	return nil
 }

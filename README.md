@@ -70,19 +70,19 @@ That covers the daily driving. The full set of flags:
 Usage of agru:
   -c	cleanup temporary files (default true)
   -cp string
-    	path to install collections (default: $ANSIBLE_COLLECTIONS_PATH, then ~/.ansible/collections)
+    	path to install collections (default: $ANSIBLE_COLLECTIONS_PATH, then $ANSIBLE_COLLECTIONS_PATHS, then $ANSIBLE_HOME/collections, then ~/.ansible/collections)
   -d string
     	delete installed role or collection, all other flags are ignored
   -i	install missing roles and collections (default true)
   -l	list installed roles and collections
   -limit int
-    	limit the number of parallel downloads. 0 - no limit (default)
+    	limit the number of parallel downloads (affects roles installation only). 0 - no limit (default)
   -no-tui
     	deprecated, interactive mode was removed
   -p string
-    	path to install roles (default "roles/galaxy/")
-  -r string
-    	ansible-galaxy requirements file (default "requirements.yml")
+    	path to install roles (default: $ANSIBLE_ROLES_PATH, then $ANSIBLE_HOME/roles, then ~/.ansible/roles)
+  -r value
+    	ansible-galaxy requirements file, wildcards supported (e.g. molecule/**/requirements.yml). Can be repeated
   -u	update requirements file if newer versions are available
   -v	print version and exit
   -verbose
@@ -137,22 +137,32 @@ Collection entries that agru cannot handle (Galaxy names, version ranges, non-gi
 extra keys like `source` or `signatures`) are skipped with a one-line notice and preserved
 verbatim on `-u`, exactly like roles with non-git sources.
 
+Transitive `dependencies` from a collection's `galaxy.yml` are not resolved: agru installs the
+collections your requirements file names, nothing more.
+
 #### path resolution
 
-Collections are installed under `{collections_path}/ansible_collections/{namespace}/{name}/`.
-The collections path is resolved in this order:
+Roles go to `{roles_path}/{role_name}/`, collections to
+`{collections_path}/ansible_collections/{namespace}/{name}/`. Both paths resolve like they do in
+`ansible-galaxy`: flag beats env, env beats the default, and with a colon-separated list the first
+entry beats the rest.
 
-1. `-cp` flag
-2. `$ANSIBLE_COLLECTIONS_PATH` env (first entry)
-3. `$ANSIBLE_COLLECTIONS_PATHS` env (legacy, first entry)
-4. `~/.ansible/collections` (default)
+| | roles | collections |
+| --- | --- | --- |
+| flag | `-p` | `-cp` |
+| env | `$ANSIBLE_ROLES_PATH` | `$ANSIBLE_COLLECTIONS_PATH`, legacy `$ANSIBLE_COLLECTIONS_PATHS` |
+| default | `$ANSIBLE_HOME/roles`, then `~/.ansible/roles` | `$ANSIBLE_HOME/collections`, then `~/.ansible/collections` |
 
-Each installed collection gets a `MANIFEST.json` written by agru so that
-`ansible-galaxy collection list` can see it. agru does not resolve
-transitive `dependencies` from `galaxy.yml`.
+agru creates the path if it is missing, 0700 for the roles dir and for each collection it extracts.
+`-l`, `-d` and reinstall all work against that same resolved path. Prefer your roles inside the
+project, like most playbooks do? `-p roles/galaxy/` or export `ANSIBLE_ROLES_PATH`.
 
-Empty version = clone HEAD, always reinstalled. `-u` never pins a version
-onto an empty-version entry.
+agru writes the same `MANIFEST.json` `ansible-galaxy` does, so `ansible-galaxy collection list`
+sees what agru installed. It never removes a directory that doesn't look like the role or
+collection it manages: it refuses and asks you to remove it by hand. An interrupted install is
+simply redone on the next run.
+
+An entry without a `version:` follows HEAD and is reinstalled on every run; `-u` never pins one.
 
 ### only list/update/install/remove operations are supported
 

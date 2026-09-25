@@ -250,8 +250,8 @@ func (i *Installer) installRole(entry *models.Entry) (installed bool, log string
 	}
 
 	// remove existing role directory to ensure stale files from previous versions are cleaned up
-	if err := os.RemoveAll(path.Join(i.rolesPath, name)); err != nil {
-		return false, logLine, fmt.Errorf("removing existing role dir: %w", err)
+	if err := RemoveRoleDir(path.Join(i.rolesPath, name)); err != nil {
+		return false, logLine, err
 	}
 
 	// extract the archive into roles path
@@ -343,14 +343,14 @@ func (i *Installer) cloneRole(name, repo, version string) (tmpdir, tmpfile, sha 
 	return tmpdir, tmpfile, sha, nil
 }
 
-// bootstrapRoles creates the roles directory if it doesn't exist
+// bootstrapRoles creates the roles dir (0700, it can hold secrets) and its missing parents (0755).
 func (i *Installer) bootstrapRoles() error {
-	_, err := os.Stat(i.rolesPath)
-	if err != nil && os.IsNotExist(err) {
-		mkerr := os.Mkdir(i.rolesPath, 0o700)
-		if mkerr != nil {
-			return fmt.Errorf("creating roles path: %w", mkerr)
-		}
+	dir := path.Clean(i.rolesPath)
+	if err := os.MkdirAll(path.Dir(dir), 0o755); err != nil {
+		return fmt.Errorf("creating roles path: %w", err)
+	}
+	if err := os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, fs.ErrExist) {
+		return fmt.Errorf("creating roles path: %w", err)
 	}
 	return nil
 }

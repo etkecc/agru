@@ -3,7 +3,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"path"
 	"strings"
 
@@ -76,7 +75,7 @@ func runDelete(cfg *config.Config, merged models.File, mergedColls models.Collec
 			utils.Error(err)
 			return err
 		}
-		if err := os.RemoveAll(path.Join(cfg.RolesPath, entry.GetName())); err != nil {
+		if err := installer.RemoveRoleDir(path.Join(cfg.RolesPath, entry.GetName())); err != nil {
 			utils.Error(err)
 			return err
 		}
@@ -91,13 +90,13 @@ func runDelete(cfg *config.Config, merged models.File, mergedColls models.Collec
 		if target == "" {
 			continue
 		}
-		if err := os.RemoveAll(target); err != nil {
+		if err := installer.RemoveCollectionDir(target); err != nil {
 			utils.Error(err)
 			return err
 		}
 		return nil
 	}
-	err := fmt.Errorf("role %q not found", cfg.DeleteName)
+	err := fmt.Errorf("%q is not in the requirements files", cfg.DeleteName)
 	utils.Error(err)
 	return err
 }

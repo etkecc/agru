@@ -13,6 +13,9 @@ import (
 	"github.com/etkecc/agru/internal/parser"
 )
 
+// seedManifest is a minimal installed-collection MANIFEST.json for delete fixtures.
+const seedManifest = `{"collection_info":{"namespace":"community","name":"docker","version":"3.13.0"},"format":"1.0.0"}`
+
 // fakeRunner records commands and returns preset outputs matched by prefix.
 type fakeRunner struct {
 	mu      sync.Mutex
@@ -121,8 +124,11 @@ func TestRunUpdateInstallFailFast(t *testing.T) {
 func TestRunDeleteRemovesDir(t *testing.T) {
 	dir := t.TempDir()
 	roleDir := filepath.Join(dir, "role-a")
-	if err := os.MkdirAll(roleDir, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(roleDir, "meta"), 0o755); err != nil {
 		t.Fatalf("seeding role dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(roleDir, "meta", "main.yml"), []byte("galaxy_info:\n"), 0o600); err != nil {
+		t.Fatalf("seeding role meta: %v", err)
 	}
 	fr := newFakeRunner()
 	cfg := config.Config{RequirementsPath: writeReqs(t, dir), RolesPath: dir, DeleteName: "role-a"}
@@ -132,6 +138,24 @@ func TestRunDeleteRemovesDir(t *testing.T) {
 	}
 	if _, err := os.Stat(roleDir); !os.IsNotExist(err) {
 		t.Errorf("delete mode left role dir on disk: stat err = %v", err)
+	}
+}
+
+// -d must refuse a directory that is not a role and leave it alone.
+func TestRunDeleteRefusesNonRoleDir(t *testing.T) {
+	dir := t.TempDir()
+	decoy := filepath.Join(dir, "role-a")
+	if err := os.MkdirAll(filepath.Join(decoy, "sub"), 0o755); err != nil {
+		t.Fatalf("seeding decoy dir: %v", err)
+	}
+	fr := newFakeRunner()
+	cfg := config.Config{RequirementsPath: writeReqs(t, dir), RolesPath: dir, DeleteName: "role-a"}
+
+	if err := Run(&cfg, parser.New(fr), installer.New(fr, dir, "", 0, true)); err == nil {
+		t.Fatal("Run() delete of a non-role dir: want error, got nil")
+	}
+	if _, err := os.Stat(filepath.Join(decoy, "sub")); err != nil {
+		t.Errorf("delete refused but removed the dir anyway: stat err = %v", err)
 	}
 }
 
@@ -245,6 +269,9 @@ func TestRunDeleteCollection(t *testing.T) {
 	if err := os.MkdirAll(collDir, 0o755); err != nil {
 		t.Fatalf("seeding collection dir: %v", err)
 	}
+	if err := os.WriteFile(filepath.Join(collDir, "MANIFEST.json"), []byte(seedManifest), 0o600); err != nil {
+		t.Fatalf("seeding collection manifest: %v", err)
+	}
 
 	fr := newFakeRunner()
 	cfg := config.Config{
@@ -274,5 +301,37 @@ roles:
 	}
 	if _, err := os.Stat(collDir); !os.IsNotExist(err) {
 		t.Errorf("delete mode left collection dir on disk: stat err = %v", err)
+	}
+}
+
+// -d must refuse a dir under the collections path that is not an installed collection.
+func TestRunDeleteRefusesNonCollectionDir(t *testing.T) {
+	dir := t.TempDir()
+	collDir := filepath.Join(dir, "collections", "ansible_collections", "community", "docker")
+	if err := os.MkdirAll(filepath.Join(collDir, "plugins"), 0o755); err != nil {
+		t.Fatalf("seeding decoy dir: %v", err)
+	}
+	fr := newFakeRunner()
+	cfg := config.Config{
+		RequirementsPath: writeReqs(t, dir),
+		RolesPath:        dir,
+		CollectionsPath:  filepath.Join(dir, "collections"),
+		DeleteName:       "community.docker",
+	}
+	fp := filepath.Join(dir, "requirements.yml")
+	content := `---
+collections:
+  - name: git+https://github.com/ansible-collections/community.docker
+    version: 3.13.0
+`
+	if err := os.WriteFile(fp, []byte(content), 0o600); err != nil {
+		t.Fatalf("writing requirements: %v", err)
+	}
+
+	if err := Run(&cfg, parser.New(fr), installer.New(fr, dir, filepath.Join(dir, "collections"), 0, true)); err == nil {
+		t.Fatal("Run() delete of a non-collection dir: want error, got nil")
+	}
+	if _, err := os.Stat(filepath.Join(collDir, "plugins")); err != nil {
+		t.Errorf("delete refused but removed the dir anyway: stat err = %v", err)
 	}
 }

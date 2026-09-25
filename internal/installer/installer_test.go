@@ -158,6 +158,39 @@ func TestRunCloneArgsNoRetryOnOtherError(t *testing.T) {
 	}
 }
 
+func TestBootstrapRolesModes(t *testing.T) {
+	tmp := t.TempDir()
+	inst := &Installer{rolesPath: filepath.Join(tmp, "nested", "roles") + "/"}
+	if err := inst.bootstrapRoles(); err != nil {
+		t.Fatalf("bootstrapRoles() error = %v", err)
+	}
+	leaf := filepath.Join(tmp, "nested", "roles")
+	fi, err := os.Stat(leaf)
+	if err != nil {
+		t.Fatalf("roles dir missing: %v", err)
+	}
+	if got := fi.Mode().Perm(); got != 0o700 {
+		t.Errorf("roles dir mode = %o, want 700", got)
+	}
+	parent, err := os.Stat(filepath.Join(tmp, "nested"))
+	if err != nil {
+		t.Fatalf("parent dir missing: %v", err)
+	}
+	if got := parent.Mode().Perm(); got != 0o755 {
+		t.Errorf("parent dir mode = %o, want 755", got)
+	}
+	// second call: an existing dir must neither error nor have its mode changed
+	if err := os.Chmod(leaf, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := inst.bootstrapRoles(); err != nil {
+		t.Errorf("bootstrapRoles() on existing dir error = %v", err)
+	}
+	if fi, err = os.Stat(leaf); err != nil || fi.Mode().Perm() != 0o755 {
+		t.Errorf("bootstrapRoles() changed an existing dir: mode = %v, err = %v", fi.Mode().Perm(), err)
+	}
+}
+
 func TestInstallRoleCallsGitInOrder(t *testing.T) {
 	tmpDir := t.TempDir()
 	rolesPath := filepath.Join(tmpDir, "roles")
