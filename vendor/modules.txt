@@ -1,4 +1,4 @@
-# github.com/bmatcuk/doublestar/v4 v4.10.0
+# github.com/bmatcuk/doublestar/v4 v4.10.2
 ## explicit; go 1.16
 github.com/bmatcuk/doublestar/v4
 # github.com/etkecc/go-kit v1.12.5
