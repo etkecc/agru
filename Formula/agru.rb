@@ -5,21 +5,21 @@
 class Agru < Formula
   desc "Fast, drop-in ansible-galaxy replacement for updating role requirements"
   homepage "https://github.com/etkecc/agru"
-  version "0.3.0"
+  version "0.4.0"
   license "AGPL-3.0-only"
 
   on_macos do
     if Hardware::CPU.intel?
-      url "https://github.com/etkecc/agru/releases/download/v0.3.0/agru_Darwin_x86_64.tar.gz"
-      sha256 "34dd3647c093822462fdf21cc03820c1a72e06f7a9fc8c6a6ddef69aed048b2b"
+      url "https://github.com/etkecc/agru/releases/download/v0.4.0/agru_Darwin_x86_64.tar.gz"
+      sha256 "22375d1f21202c7ddd83c423d8e31162260e3c7ede64c634477592a8a804527c"
 
       define_method(:install) do
         bin.install "agru"
       end
     end
     if Hardware::CPU.arm?
-      url "https://github.com/etkecc/agru/releases/download/v0.3.0/agru_Darwin_arm64.tar.gz"
-      sha256 "780f24341eeadcf87adde41628828c78417b0059c32f053fa8ffe88bc4f60afa"
+      url "https://github.com/etkecc/agru/releases/download/v0.4.0/agru_Darwin_arm64.tar.gz"
+      sha256 "17f7acbddabbb56c6456545606a2cf771ea030b41d6f37585a79cc3ba85d818a"
 
       define_method(:install) do
         bin.install "agru"
@@ -29,15 +29,15 @@ class Agru < Formula
 
   on_linux do
     if Hardware::CPU.intel? && Hardware::CPU.is_64_bit?
-      url "https://github.com/etkecc/agru/releases/download/v0.3.0/agru_Linux_x86_64.tar.gz"
-      sha256 "1601916b0762d37c25ca2ba85428d44df02057bf4125b776a9258efabe33c015"
+      url "https://github.com/etkecc/agru/releases/download/v0.4.0/agru_Linux_x86_64.tar.gz"
+      sha256 "5579a881adab8f065123effc0bcc46871955d37ef8d905c02eaf308537725757"
       define_method(:install) do
         bin.install "agru"
       end
     end
     if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
-      url "https://github.com/etkecc/agru/releases/download/v0.3.0/agru_Linux_arm64.tar.gz"
-      sha256 "1684f69eca589003d8302ccb50edb4235d52d01ecd50564e1cb6417c026b8d4a"
+      url "https://github.com/etkecc/agru/releases/download/v0.4.0/agru_Linux_arm64.tar.gz"
+      sha256 "2ae3f4c3ee003e872ea912bd1c7003f83f31745f859185801944493df29baaa6"
       define_method(:install) do
         bin.install "agru"
       end
